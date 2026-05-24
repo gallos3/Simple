@@ -1,0 +1,406 @@
+[
+  {
+    "id": 1,
+    "question": [
+      "πόσες αναθέτουσες αρχές έχω;",
+      "πόσους αναθέτοντες φορείς έχω;",
+      "πόσους φορείς του δημοσίου έχω;",
+      "πόσους δημόσιους φορείς έχω;",
+      "πόσες δημόσιες υπηρεσίες έχω;",
+      "πόσοι ανέθεσαν;",
+      "how many contracting authorities have I?",
+      "how many public bodies have I?"
+    ],
+    "query": "MATCH (a:Buyer) RETURN count(a) AS αναθέτουσες_αρχές"
+  },
+  {
+    "id": 2,
+    "question": [
+      "πόσες εταιρίες έχω;",
+      "πόσους οικονομικούς φορείς έχω;",
+      "πόσους ιδιώτες έχω",
+      "πόσες επιχειρήσεις έχω;",
+      "how many companies have I?",
+      "how many economic operators have I?"
+    ],
+    "query": "MATCH (c:Winner) RETURN count(c) AS εταιρείες"
+  },
+  {
+    "id": 3,
+    "question": [
+      "πόσες συμβάσεις έχω;",
+      "πόσα συμβόλαια έχω;",
+      "πόσες αναθέσεις έγιναν;",
+      "πόσες δημόσιες συμβάσεις έχω;",
+      "how many contracts have I?",
+      "how many awards have I?"
+    ],
+    "query": "MATCH (c:Award) RETURN count(c) AS συμβάσεις"
+  },
+  {
+    "id": 4,
+    "questions": [
+      "πόσες απευθείας αναθέσεις έχω",
+      "πόσες διαδικασίες απευθείας ανάθεσης έχω",
+      "πόσες συνοπτικές διαδικασίες έχω",
+      "πόσους συνοπτικούς διαγωνισμούς έχω",
+      "πόσες ανοικτές διαδικασίες έχω",
+      "πόσους ανοικτούς διαγωνισμούς έχω",
+      "πόσες διαπραγματεύσεις χωρίς προηγούμενη δημοσίευση έχω",
+      "πόσες ανταγωνιστικές διαδικασίες με διαπραγμάτευση έχω"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS toLower($procedure) RETURN coalesce(c.procedure, c.title) AS διαδικασία, count(c) AS πλήθος"
+  },
+  {
+    "id": 5,
+    "question": [
+      "ποια είναι η συνολική αξία των απευθείας αναθέσεων;",
+      "which is the value of direct awards?",
+      "ποια η συνολική αξία των αναθέσεων σε εταιρεία της επιλογής μου"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND c.value IS NOT NULL RETURN sum(toFloat(c.value)) AS συνολική_αξία_απευθείας_αναθέσεων"
+  },
+  {
+    "id": 6,
+    "question": [
+      "δώσε μου τις top 5 αναθέτουσες αρχές που έκαναν τις πιο πολλές απευθείας αναθέσεις;",
+      "ποιες ειναι οι 5 αναθετουσες αρχές με τις περισσότερες απευθείας αναθέσεις;",
+      "τοπ 5 αναθέτουσες αρχές σε απευθείας αναθέσεις",
+      "τοπ 5 υπηρεσίες σε απευθείας αναθέσεις",
+      "ποιες ειναι οι 5 υπηρεσίες με τις περισσότερες απευθείας αναθέσεις",
+      "ποιοι 5 έκαναν τις περισσότερες απυθείας αναθέσεις;",
+      "top 5 contracting authorities with the more direct awards"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"direct award\" RETURN a.name AS αναθέτουσα_αρχή, count(c) AS απευθείας_αναθέσεις ORDER BY απευθείας_αναθέσεις DESC LIMIT 5"
+  },
+  {
+    "id": 7,
+    "question": [
+      "πόσες συμβάσεις έχει η {αναθέτουσα}",
+      "πόσες συμβάσεις έχει το {αναθέτουσα}",
+      "how many contracts {Buyer} have?"
+    ],
+    "query": "MATCH (a:Buyer) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) WITH a MATCH (a)-[:AWARDS]->(c:Award) RETURN count(c) AS συμβάσεις"
+  },
+  {
+    "id": 8,
+    "question": "πόσες εταιρίες συμμετείχαν σε συμβάσεις με απευθείας ανάθεση;",
+    "query": "MATCH (co:Winner)-[:WON_BY]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"direct award\" RETURN count(DISTINCT co) AS εταιρείες_σε_απευθείας_αναθέσεις"
+  },
+  {
+    "id": 9,
+    "question": "Ποια η συνολική αξία όλων των συμβάσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE c.value IS NOT NULL RETURN sum(toFloat(c.value)) AS συνολική_αξία"
+  },
+  {
+    "id": 10,
+    "question": "Ποια είναι η μέση τιμή της αξίας των συμβάσεων με απευθείας ανάθεση;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND c.value IS NOT NULL RETURN round(avg(toFloat(c.value)), 2) AS μέση_αξία_απευθείας_αναθέσεων"
+  },
+  {
+    "id": 11,
+    "question": "πόσες διαφορετικές διαδικασίες ανάθεσης υπάρχουν;",
+    "query": "MATCH (c:Award) WHERE c.procedure IS NOT NULL RETURN count(DISTINCT c.procedure) AS διαδικασίες_ανάθεσης"
+  },
+  {
+    "id": 12,
+    "question": [
+      "δώσε μου τις 10 εταιρίες με τις περισσότερες συμβάσεις",
+      "δείξε top 10 εταιρείες",
+      "δείξε μου τις top 10 εταιρείες",
+      "ποιες είναι οι top 10 εταιρείες",
+      "top 10 εταιρείες",
+      "εταιρείες με τις περισσότερες συμβάσεις",
+      "ποιες εταιρείες έχουν τις περισσότερες συμβάσεις"
+    ],
+    "query": "MATCH (co:Winner)-[:WON_BY]-(c:Award) RETURN co.name AS εταιρεία, count(c) AS συμβάσεις ORDER BY συμβάσεις DESC LIMIT 10"
+  },
+  {
+    "id": 13,
+    "question": [
+      "πόσες συμβάσεις υπογράφηκαν",
+      "πόσες συμβάσεις έγιναν",
+      "πόσες συμβάσεις έχω"
+    ],
+    "query": "MATCH (c:Award) WHERE trim(toString(c.submission_date)) STARTS WITH  RETURN count(c) AS συμβάσεις",
+    "needs_year": true
+  },
+  {
+    "id": 15,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος απευθείας αναθέσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' RETURN a.name AS αναθέτουσα_αρχή, count(c) AS απευθείας_αναθέσεις ORDER BY απευθείας_αναθέσεις DESC LIMIT 10"
+  },
+  {
+    "id": 16,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε συνολική αξία απευθείας αναθέσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND c.value IS NOT NULL RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, sum(toFloat(c.value)) AS συνολική_αξία ORDER BY συνολική_αξία DESC LIMIT 10"
+  },
+  {
+    "id": 17,
+    "question": "ποιες είναι οι Top10 αναθέτουσες αρχές με την υψηλότερη μέση τιμή σε απευθείας αναθέσεις;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND c.value IS NOT NULL RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, round(avg(toFloat(c.value)), 2) AS μέση_αξία ORDER BY μέση_αξία DESC LIMIT 10"
+  },
+  {
+    "id": 18,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές με το μεγαλύτερο ποσοστό απευθείας αναθέσεων σε σχέση με το σύνολο των αναθέσεων των συμβάσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WITH a, count(c) AS total_contracts, count(CASE WHEN toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' THEN 1 END) AS direct_awards RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, round(toFloat(direct_awards) / total_contracts * 100, 2) AS ποσοστό_απευθείας ORDER BY ποσοστό_απευθείας DESC LIMIT 10"
+  },
+  {
+    "id": 19,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος αναθέσεων με συνοπτικό διαγωνισμό;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"summary tender\" WITH a, count(c) AS συνοπτικοί_διαγωνισμοί RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, συνοπτικοί_διαγωνισμοί ORDER BY συνοπτικοί_διαγωνισμοί DESC LIMIT 10"
+  },
+  {
+    "id": 20,
+    "question": "Ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος απευθείας αναθέσεων λόγω covid-19;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"direct award\" AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"covid\" WITH a, count(c) AS covid_αναθέσεις RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, covid_αναθέσεις ORDER BY covid_αναθέσεις DESC LIMIT 10"
+  },
+  {
+    "id": 21,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος διαπραγμάτευσης χωρίς προηγούμενη δημοσίευση λόγω covid-19;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"negotiation\" AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"covid\" WITH a, count(c) AS covid_διαπραγματεύσεις RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, covid_διαπραγματεύσεις ORDER BY covid_διαπραγματεύσεις DESC LIMIT 10"
+  },
+  {
+    "id": 22,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος διαπραγμάτευσης χωρίς προηγούμενη δημοσίευση;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"negotiation\" WITH a, count(c) AS διαπραγματεύσεις RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, διαπραγματεύσεις ORDER BY διαπραγματεύσεις DESC LIMIT 10"
+  },
+  {
+    "id": 23,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος τροποιητικών συμβάσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toInteger(c.modified)= 1 WITH a, count(c) AS τροποποιητικές_συμβάσεις RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, τροποποιητικές_συμβάσεις ORDER BY τροποποιητικές_συμβάσεις DESC LIMIT 10"
+  },
+  {
+    "id": 24,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος παρατάσεων συμβάσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toInteger(c.extended) = 1 WITH a, count(c) AS παρατάσεις RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, παρατάσεις ORDER BY παρατάσεις DESC LIMIT 10"
+  },
+  {
+    "id": 25,
+    "question": "ποιες είναι οι top10 αναθέτουσες αρχές σε πλήθος συγχρηματοδοτούμενων συμβάσεων;",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toInteger(c.espa_funding) = 1 WITH a, count(c) AS συγχρηματοδοτούμενες RETURN a.name AS αναθέτουσα_αρχή, a.Buyer_code AS κωδικός, συγχρηματοδοτούμενες ORDER BY συγχρηματοδοτούμενες DESC LIMIT 10"
+  },
+  {
+    "id": 26,
+    "questions": [
+      "πόσες {τύπος} εκανε η {αναθέτουσα} το {έτος}",
+      "πόσες {τύπος} διαδικασίες έχει κάνει η {αναθέτουσα} το {έτος}",
+      "πόσες {τύπος} έχει το {αναθέτουσα} το {έτος}",
+      "πόσες {τύπος} είχε το {αναθέτουσα} το {έτος}"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS toLower($procedure) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN count(c) AS πλήθος"
+  },
+  {
+    "id": 27,
+    "question": "δώσε μου το ποσοστό των απευθείας αναθέσεων που έχει κάνει το ΑΧΕΠΑ σε σχέση με τις συνολικές αναθέσεις που έχει κάνει",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(apoc.text.join(apoc.convert.toList(a.name), ' ')) CONTAINS 'αχεπα' WITH a, count(c) AS total_contracts MATCH (a)-[:AWARDS]->(c2:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' WITH total_contracts, count(c2) AS direct_awards RETURN round(toFloat(direct_awards) / toFloat(total_contracts) * 100, 2) AS ποσοστό_απευθείας_αναθέσεων",
+    "graph": false
+  },
+  {
+    "id": 28,
+    "question": "Δείξε μου το γράφημα με τις 5 αναθέτουσες αρχές με τις περισσότερες απευθείας αναθέσεις",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award)\nWHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"direct award\"\nWITH a, count(c) AS total\nORDER BY total DESC\nLIMIT 5\nWITH collect(a) AS topAuthorities\nUNWIND topAuthorities AS auth\nMATCH path=(auth)-[:AWARDS]->(c:Award)\nRETURN path",
+    "graph": true
+  },
+  {
+    "id": 29,
+    "question": "Δείξε μου το γράφημα με τις 5 εταιρείες που έχουν τις περισσότερες απευθείας αναθέσεις",
+    "query": "MATCH (a:Buyer)-[r1:AWARDS]->(c:Award)-[r2:WON_BY]->(co:Winner) WITH co, a, r1, c, r2, count(c) AS cnt ORDER BY cnt DESC LIMIT 5 RETURN a, r1, c, r2, co",
+    "graph": true
+  },
+  {
+    "id": 30,
+    "question": "Δείξε μου τις 5 κατηγορίες συμβάσεων με τις περισσότερες απευθείας αναθέσεις",
+    "query": "MATCH (c:Award), (c) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS \"direct award\" RETURN coalesce(c.procedure, c.title), count(c) AS απευθείας_αναθέσεις ORDER BY απευθείας_αναθέσεις DESC LIMIT 5",
+    "graph": true
+  },
+  {
+    "id": 31,
+    "question": "ποιος είναι ο λόγος των απευθείας αναθέσεων με τις συμβάσεις",
+    "query": "MATCH (c:Award) WITH count(c) AS total_contracts MATCH (c2:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' WITH total_contracts, count(c2) AS direct_awards RETURN round(toFloat(direct_awards) / toFloat(total_contracts) * 100, 2) AS ποσοστό_απευθείας_αναθέσεων"
+  },
+  {
+    "id": 32,
+    "question": "Δείξε μου το γραφημα με τις απευθείας αναθέσεις του ΑΧΕΠΑ",
+    "query": "MATCH b=(a:Buyer)-[r1:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND toLower(apoc.text.join(apoc.convert.toList(a.name), ' ')) CONTAINS 'αχεπα' RETURN a, r1, c"
+  },
+  {
+    "id": 33,
+    "question": [
+      "πόσες απευθείας αναθέσεις έχει η {αναθέτουσα}",
+      "πόσες απευθείας αναθέσεις έκανε η {αναθέτουσα}",
+      "πόσες απευθείας αναθέσεις έχει το {αναθέτουσα}",
+      "απευθείας αναθέσεις της {αναθέτουσα}",
+      "how many direct awards has {Buyer}"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' RETURN count(c) AS απευθείας_αναθέσεις"
+  },
+  {
+    "id": 34,
+    "question": [
+      "πόσες απευθείας αναθέσεις έχει η {αναθέτουσα} το {έτος}",
+      "πόσες απευθείας αναθέσεις έκανε η {αναθέτουσα} το {έτος}",
+      "απευθείας αναθέσεις της {αναθέτουσα} το {έτος}",
+      "direct awards of {Buyer} in {year}"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN count(c) AS απευθείας_αναθέσεις"
+  },
+  {
+    "id": 35,
+    "question": [
+      "ποια η αξία απευθείας αναθέσεων της {αναθέτουσα}",
+      "ποια η συνολική αξία απευθείας αναθέσεων της {αναθέτουσα}",
+      "πόσα ξόδεψε σε απευθείας αναθέσεις η {αναθέτουσα}",
+      "what is the value of direct awards for {Buyer}"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND c.value IS NOT NULL RETURN sum(toFloat(c.value)) AS συνολική_αξία_απευθείας_αναθέσεων"
+  },
+  {
+    "id": 36,
+    "question": [
+      "ποιες εταιρείες πήραν απευθείας αναθέσεις από {αναθέτουσα}",
+      "σε ποιες εταιρείες έδωσε απευθείας αναθέσεις η {αναθέτουσα}",
+      "ανάδοχοι απευθείας αναθέσεων της {αναθέτουσα}",
+      "top contractors of {Buyer}"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(co:Winner), (c) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' RETURN co.name AS ανάδοχος, count(c) AS πλήθος, sum(toFloat(c.value)) AS αξία ORDER BY πλήθος DESC LIMIT 10"
+  },
+  {
+    "id": 37,
+    "question": [
+      "πόσες συμβάσεις έχει η {αναθέτουσα} το {έτος}",
+      "πόσες συμβάσεις έκανε η {αναθέτουσα} το {έτος}",
+      "συμβάσεις της {αναθέτουσα} το {έτος}",
+      "contracts of {Buyer} in {year}",
+      "ποσες συμβασεις ειχε ο Δημος Αθηναιων το 2024",
+      "πόσες συμβάσεις είχε ο φορέας το 2023"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN count(c) AS συμβάσεις"
+  },
+  {
+    "id": 70,
+    "question": "Δώσε πλήθος και αξία συμβάσεων ανά διαδικασία ανάθεσης για μια αρχή",
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN c.procedure AS διαδικασία, count(*) AS πλήθος, sum(toFloat(c.value)) AS αξία"
+  },
+  {
+    "id": 101,
+    "question": "1α. Απευθείας αναθέσεις > 30.000€ (εκτός εξαιρούμενων CPV)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND NOT toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] AND toFloat(coalesce(c.value, c.initial_value, c.final_value, 0)) > 30000 WITH DISTINCT c, a RETURN a.name AS Αναθέτουσα_Αρχή, coalesce(c.cpv, c.cpv_code) AS CPV, coalesce(c.value, c.initial_value, c.final_value) AS Ποσό"
+  },
+  {
+    "id": 102,
+    "question": "1β. Απευθείας αναθέσεις > 60.000€ (για εξαιρούμενους CPV)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] AND toFloat(coalesce(c.value, c.initial_value, c.final_value, 0)) > 60000 WITH DISTINCT c, a RETURN a.name AS Αναθέτουσα_Αρχή, coalesce(c.cpv, c.cpv_code) AS CPV, coalesce(c.value, c.initial_value, c.final_value) AS Ποσό"
+  },
+  {
+    "id": 103,
+    "question": "2α. Σύνολο ανά CPV > 30.000€ (εκτός εξαιρούμενων)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND NOT toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a WITH a.name AS Αναθέτουσα_Αρχή, coalesce(c.cpv, c.cpv_code) AS CPV, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 30000 RETURN Αναθέτουσα_Αρχή, CPV, Σύνολο"
+  },
+  {
+    "id": 104,
+    "question": "2β. Σύνολο ανά CPV > 60.000€ (εξαιρούμενοι)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a WITH a.name AS Αναθέτουσα_Αρχή, coalesce(c.cpv, c.cpv_code) AS CPV, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 60000 RETURN Αναθέτουσα_Αρχή, CPV, Σύνολο"
+  },
+  {
+    "id": 105,
+    "question": "4α. Σύνολο ανά CPV-5 > 30.000€ (εκτός εξαιρούμενων)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND NOT toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a WITH a.name AS Αναθέτουσα_Αρχή, substring(toString(coalesce(c.cpv, c.cpv_code, \"\")), 0, 5) AS CPV5, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 30000 RETURN Αναθέτουσα_Αρχή, CPV5, Σύνολο"
+  },
+  {
+    "id": 106,
+    "question": "4β. Σύνολο ανά CPV-5 > 60.000€ (εξαιρούμενοι)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a WITH a.name AS Αναθέτουσα_Αρχή, substring(toString(coalesce(c.cpv, c.cpv_code, \"\")), 0, 5) AS CPV5, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 60000 RETURN Αναθέτουσα_Αρχή, CPV5, Σύνολο"
+  },
+  {
+    "id": 107,
+    "question": "5α. Σύνολο ανά Ανάδοχο > 30.000€ (εκτός εξαιρούμενων)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(co:Winner) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a, co WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND NOT toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a, co WITH a.name AS Αναθέτουσα_Αρχή, co.name AS Ανάδοχος, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 30000 RETURN Αναθέτουσα_Αρχή, Ανάδοχος, Σύνολο"
+  },
+  {
+    "id": 108,
+    "question": "5β. Σύνολο ανά Ανάδοχο > 60.000€ (εξαιρούμενοι)",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(co:Winner) WHERE (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) AND ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name))  WITH c, a, co WHERE (toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"direct award\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθείας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθειας\" OR toLower(coalesce(coalesce(c.procedure, c.title), c.procedure, \"\")) CONTAINS \"απευθ\") AND toString(coalesce(c.cpv, c.cpv_code, \"\")) IN [\"45000000\", \"45100000\", \"45110000\", \"45120000\", \"45200000\", \"45210000\", \"45261000\", \"45212212\", \"45240000\", \"45250000\", \"45262000\", \"45300000\", \"45213316\", \"45310000\", \"45316000\", \"45320000\", \"45330000\", \"45234115\", \"45340000\", \"45400000\", \"45410000\", \"45420000\", \"45430000\", \"45440000\", \"45450000\", \"45500000\", \"75200000\", \"75231200\", \"75231240\", \"79611000\", \"79622000\"] WITH DISTINCT c, a, co WITH a.name AS Αναθέτουσα_Αρχή, co.name AS Ανάδοχος, sum(toFloat(coalesce(c.value, c.initial_value, c.final_value, 0))) AS Σύνολο WHERE Σύνολο > 60000 RETURN Αναθέτουσα_Αρχή, Ανάδοχος, Σύνολο"
+  },
+  {
+    "id": 109,
+    "question": "1. Απευθείας αναθέσεις > 30.000€ ανά Αναθέτουσα Αρχή",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND toFloat(c.value) > 30000 AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN a.name AS αναθέτουσα_αρχή, c.value AS ποσό, c.identifier AS σύμβαση"
+  },
+  {
+    "id": 110,
+    "question": "2. Αθροιστική αξία απευθείας αναθέσεων > 30.000€ προς τον ίδιο ανάδοχο",
+    "query": "MATCH (a:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(co:Winner), (c) WHERE toLower(coalesce(c.procedure, c.title, \"\")) CONTAINS 'direct award' AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) WITH a.name AS αναθέτουσα_αρχή, co.name AS ανάδοχος, sum(toFloat(c.value)) AS σύνολο WHERE σύνολο > 30000 RETURN αναθέτουσα_αρχή, ανάδοχος, σύνολο"
+  },
+  {
+    "id": 201,
+    "question": "Σύνολο αναθέσεων & αξία για αρχή",
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN count(c) AS συμβάσεις, sum(toFloat(c.value)) AS συνολική_αξία"
+  },
+  {
+    "id": 202,
+    "question": "Πλήθος αναθέσεων ανά διαδικασία για αρχή",
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) WITH c RETURN 'art26_breakdown' AS διαδικασία, count(c) AS πλήθος"
+  },
+  {
+    "id": 203,
+    "question": "Αξία αναθέσεων ανά διαδικασία για αρχή",
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award) WHERE ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) AND (toString(c.submission_date) STARTS WITH $year OR c.year = toInteger($year)) RETURN coalesce(c.procedure, c.title) AS διαδικασία, sum(toFloat(c.value)) AS αξία ORDER BY αξία DESC"
+  },
+  {
+    "id": 500,
+    "question": [
+      "ποιες αναθέσεις ξεπερνούν το νόμιμο όριο;",
+      "υπάρχουν συμβάσεις πάνω από το όριο;",
+      "find contracts exceeding legal threshold"
+    ],
+    "query": "MATCH (c:Award)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold) WHERE c.value > t.value RETURN c.identifier as σύμβαση, c.value as ποσό, t.value as όριο, cpv.code as CPV, t.type as κατηγορία ORDER BY c.value DESC LIMIT 10"
+  },
+  {
+    "id": 501,
+    "question": [
+      "υπάρχει πιθανή κατάτμηση;",
+      "έλεγχος για κατάτμηση συμβάσεων",
+      "check for contract splitting"
+    ],
+    "query": "MATCH (a:Buyer)-[:AWARDS]->(c:Award)-[:WON_BY]->(co:Winner), (c)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold) WHERE c.submission_date.year = toInteger($year) WITH a, co, cpv, t, sum(c.value) as total_value, collect(c.identifier) as contracts WHERE total_value > t.value AND size(contracts) > 1 RETURN a.name as αναθέτουσα, co.name as ανάδοχος, cpv.code as CPV, total_value as συνολικό_ποσό, t.value as όριο, contracts as συμβάσεις ORDER BY total_value DESC"
+  },
+  {
+    "id": 502,
+    "question": [
+      "δείξε μου το γράφημα των αναθέσεων για το CPV",
+      "εμφάνιση γραφήματος για CPV",
+      "show graph for CPV"
+    ],
+    "query": "MATCH (cpv:CPV) WHERE cpv.code STARTS WITH $cpv WITH cpv MATCH (a:Buyer)-[r1:AWARDS]->(c:Award)-[r2:HAS_CPV]->(cpv), (c)-[r3:WON_BY]->(co:Winner) RETURN a, r1, c, r2, cpv, r3, co LIMIT 50",
+    "action": "show_graph"
+  },
+  {
+    "id": 503,
+    "question": [
+      "δώσε μου τον γράφο της εταιρείας με τις περισσότερες αναθέσεις",
+      "ποια εταιρεία έχει τις περισσότερες αναθέσεις γράφος",
+      "γράφημα εταιρείας με τα περισσότερα contracts",
+      "show graph of company with most awards",
+      "εταιρεία με τις περισσότερες αναθέσεις σε πλήθος γράφος",
+      "γράφημα με τις 5 εταιρείες με τις περισσότερες αναθέσεις",
+      "δείξε γράφο με τις δύο εταιρείες που έχουν τις περισσότερες αναθέσεις",
+      "top εταιρείες γράφος αναθέσεις"
+    ],
+    "query": "MATCH (co:Winner)<-[:WON_BY]-(c:Award)<-[:AWARDS]-(a:Buyer) WITH co, count(c) AS cnt ORDER BY cnt DESC LIMIT $top_n MATCH (a2:Buyer)-[r1:AWARDS]->(c2:Award)-[r2:WON_BY]->(co) RETURN a2, r1, c2, r2, co LIMIT 100",
+    "action": "show_graph"
+  },
+  {
+    "id": 504,
+    "question": [
+      "δείξε μου το γράφημα των αναθέσεων για την αναθέτουσα",
+      "γράφημα αναθέσεων για εταιρεία",
+      "δώσε μου τα γράφω το συμβάσεων του φορέα",
+      "εμφάνιση γραφήματος για",
+      "show graph for entity"
+    ],
+    "query": "MATCH (a:Buyer)-[r1:AWARDS]->(c:Award)-[r2:WON_BY]->(co:Winner) WHERE (ANY(n IN apoc.convert.toList(a.name) WHERE toLower(n) = toLower($name)) OR ANY(n IN apoc.convert.toList(co.name) WHERE toLower(n) = toLower($name))) AND ($year = '' OR toString(c.submission_date) STARTS WITH toString($year) OR toString(c.year) = toString($year)) RETURN a, r1, c, r2, co LIMIT 100",
+    "action": "show_graph",
+    "graph": true
+  }
+]

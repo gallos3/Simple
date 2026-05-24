@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Federated - Entity Resolution HITL</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 8px; border: none; }
+        .card-header { background-color: #343a40; color: white; border-top-left-radius: 8px !important; border-top-right-radius: 8px !important; font-weight: bold; }
+        .entity-box { padding: 15px; border-radius: 5px; background-color: #e9ecef; height: 100%; }
+        .entity-title { font-size: 1.1em; font-weight: bold; color: #495057; }
+        .similarity-badge { font-size: 1.2em; padding: 10px; }
+        .btn-merge { background-color: #28a745; color: white; }
+        .btn-reject { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Entity Resolution - Human in the Loop (HITL)</h2>
+        <div>
+            <select id="entitySelect" class="form-select d-inline-block w-auto">
+                <option value="Buyer">Αναθέτουσες Αρχές (Buyers)</option>
+                <option value="Winner">Ανάδοχοι (Winners)</option>
+            </select>
+            <button class="btn btn-primary ms-2" onclick="loadReviews()">Ανανέωση</button>
+        </div>
+    </div>
+    
+    <div id="loading" class="text-center my-5 d-none">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Φόρτωση...</span>
+        </div>
+        <p class="mt-2">Γίνεται φόρτωση εκκρεμοτήτων...</p>
+    </div>
+
+    <div id="reviews-container">
+        <!-- Cards will be injected here via JS -->
+    </div>
+    
+    <div id="empty-state" class="text-center my-5 d-none">
+        <h4>Δεν βρέθηκαν εκκρεμότητες! 🎉</h4>
+        <p class="text-muted">Το σύστημα Entity Resolution δεν έχει εντοπίσει άλλες ασαφείς διπλοεγγραφές.</p>
+    </div>
+</div>
+
+<script>
+    let currentPairs = [];
+
+    async function loadReviews() {
+        const entity = document.getElementById("entitySelect").value;
+        const container = document.getElementById("reviews-container");
+        const loading = document.getElementById("loading");
+        const emptyState = document.getElementById("empty-state");
+        
+        container.innerHTML = "";
+        loading.classList.remove("d-none");
+        emptyState.classList.add("d-none");
+
+        try {
+            const response = await fetch(`/api/pending_reviews?entity=${entity}`);
+            const pairs = await response.json();
+            currentPairs = pairs;
+            
+            loading.classList.add("d-none");
+            
+            if (pairs.length === 0) {
+                emptyState.classList.remove("d-none");
+                return;
+            }
+
+            pairs.forEach((pair, index) => {
+                const card = createReviewCard(pair, entity, index);
+                container.appendChild(card);
+            });
+        } catch (error) {
+            console.error("Error loading reviews:", error);
+            loading.classList.add("d-none");
+            alert("Σφάλμα κατά τη φόρτωση των δεδομένων.");
+        }
+    }
+
+    function createReviewCard(pair, entityType, index) {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.id = `pair-card-${index}`;
+        
+        const scorePercent = (pair.score * 100).toFixed(1);
+        let badgeClass = pair.score > 0.85 ? "bg-success" : "bg-warning text-dark";
+
+        div.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Πιθανή Διπλοεγγραφή (Σύγκρουση ${index + 1})</span>
+                <span class="badge ${badgeClass} similarity-badge">Ομοιότητα: ${scorePercent}%</span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-5">
+                        <div class="entity-box">
+                            <div class="text-muted small mb-1">ΟΝΤΟΤΗΤΑ 1 (Target)</div>
+                            <div class="entity-title">${pair.name1}</div>
+                            <div class="mt-2"><strong>ΑΦΜ:</strong> ${pair.vat1 || '<span class="text-muted">Άγνωστο</span>'}</div>
+                            <div><strong>Συμβάσεις:</strong> <span class="badge bg-secondary">${pair.count1}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-2 d-flex flex-column justify-content-center align-items-center">
+                        <div class="fs-3 text-muted">🆚</div>
+                    </div>
+                    
+                    <div class="col-md-5">
+                        <div class="entity-box">
+                            <div class="text-muted small mb-1">ΟΝΤΟΤΗΤΑ 2 (Source)</div>
+                            <div class="entity-title">${pair.name2}</div>
+                            <div class="mt-2"><strong>ΑΦΜ:</strong> ${pair.vat2 || '<span class="text-muted">Άγνωστο</span>'}</div>
+                            <div><strong>Συμβάσεις:</strong> <span class="badge bg-secondary">${pair.count2}</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-end gap-2 p-3">
+                <button class="btn btn-reject px-4" onclick="resolveReview(${index}, 'reject', '${entityType}')">
+                    ❌ Απόρριψη (Είναι διαφορετικά)
+                </button>
+                <button class="btn btn-merge px-4" onclick="resolveReview(${index}, 'approve', '${entityType}')">
+                    ✅ Έγκριση & Συγχώνευση (Merge)
+                </button>
+            </div>
+        `;
+        return div;
+    }
+
+    async function resolveReview(index, action, entityType) {
+        const pair = currentPairs[index];
+        const card = document.getElementById(`pair-card-${index}`);
+        
+        // Disable buttons to prevent double click
+        const buttons = card.querySelectorAll("button");
+        buttons.forEach(b => b.disabled = true);
+        
+        try {
+            const response = await fetch('/api/resolve_review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: action,
+                    id1: pair.id1,
+                    id2: pair.id2,
+                    entity: entityType
+                })
+            });
+            
+            if (response.ok) {
+                // Fade out and remove card
+                card.style.transition = "opacity 0.4s";
+                card.style.opacity = "0";
+                setTimeout(() => {
+                    card.remove();
+                    // Check if empty
+                    if (document.getElementById("reviews-container").children.length === 0) {
+                        document.getElementById("empty-state").classList.remove("d-none");
+                    }
+                }, 400);
+            } else {
+                const data = await response.json();
+                alert(`Σφάλμα: ${data.error}`);
+                buttons.forEach(b => b.disabled = false);
+            }
+        } catch (error) {
+            console.error("Error resolving:", error);
+            alert("Σφάλμα δικτύου.");
+            buttons.forEach(b => b.disabled = false);
+        }
+    }
+
+    // Load initial data on mount
+    document.addEventListener("DOMContentLoaded", loadReviews);
+    
+    // Listen for select change
+    document.getElementById("entitySelect").addEventListener("change", loadReviews);
+</script>
+
+</body>
+</html>

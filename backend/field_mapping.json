@@ -1,0 +1,9 @@
+{
+  "REFERENCE_NUMBER":"Contract.reference_number",
+  "CONTRACT_NUM":"Contract.contract_number",
+  "TITLE":"Contract.title",
+  "CONTRACT_TYPE":"Contract.type",
+  "PROCEDURE_TYPE":"ProcedureType.code",
+  "CONTRACT_BUDGET":"Contract.budget",
+  "ESPA_FUNDING":"Contract.espa_funding"
+}
