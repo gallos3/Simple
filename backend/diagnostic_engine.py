@@ -294,7 +294,7 @@ def calculate_conditional_entropy(year: str = "2024", cpv_domain: str = None) ->
 #       score(a,s) = (HF + AA) / (PA + epsilon)   normalized to [0,1]
 # =============================================================================
 
-def calculate_ici(authority_name: str) -> Dict[str, Any]:
+def calculate_ici(authority_name: str, cpv_domain: str = None) -> Dict[str, Any]:
     """
     Institutional Closure Index for a specific contracting authority.
     Uses multi-year data for Historical Frequency and Adamic-Adar.
@@ -303,20 +303,20 @@ def calculate_ici(authority_name: str) -> Dict[str, Any]:
       - High  → concentrated + persistent relationships → "Institutional Closure"
       - Low   → dispersed or non-persistent → open, competitive procurement
     """
-    # Step 0: Find dominant CPV domain (5-digit)
-    # Note: Buyer.name may be an array — use ANY() for matching
-    cypher_domain = """
-    MATCH (u:Buyer)-[:AWARDS]-(c:Award)
-    WHERE ANY(n IN u.name WHERE n = $authority)
-      AND c.cpv_code IS NOT NULL
-    WITH substring(c.cpv_code, 0, 5) AS cpv_domain, count(c) AS cnt
-    ORDER BY cnt DESC
-    RETURN cpv_domain LIMIT 1
-    """
-    domain_res = execute_cypher(cypher_domain, {"authority": authority_name}, format_output=False)
-    cpv_domain = None
-    if isinstance(domain_res, list) and domain_res and isinstance(domain_res[0], dict):
-        cpv_domain = domain_res[0].get("cpv_domain")
+    # Step 0: Find dominant CPV domain (5-digit) if not provided
+    if not cpv_domain:
+        # Note: Buyer.name may be an array — use ANY() for matching
+        cypher_domain = """
+        MATCH (u:Buyer)-[:AWARDS]-(c:Award)
+        WHERE ANY(n IN u.name WHERE n = $authority)
+          AND c.cpv_code IS NOT NULL
+        WITH substring(c.cpv_code, 0, 5) AS cpv_domain, count(c) AS cnt
+        ORDER BY cnt DESC
+        RETURN cpv_domain LIMIT 1
+        """
+        domain_res = execute_cypher(cypher_domain, {"authority": authority_name}, format_output=False)
+        if isinstance(domain_res, list) and domain_res and isinstance(domain_res[0], dict):
+            cpv_domain = domain_res[0].get("cpv_domain")
 
     # If we found a dominant CPV domain, we filter by it. Otherwise, we calculate globally.
     cpv_filter_c  = "AND c.cpv_code STARTS WITH $cpv_domain"  if cpv_domain else ""
@@ -689,7 +689,7 @@ def calculate_full_diagnostics(authority_name: str = None, year: str = "2024", c
     base = calculate_authority_diagnostics(authority_name, year, cpv_domain=cpv_to_use)
     entropy = calculate_network_entropy(year, cpv_to_use)
     conditional = calculate_conditional_entropy(year, cpv_to_use)
-    ici = calculate_ici(authority_name) if authority_name else {"status": "no_data"}
+    ici = calculate_ici(authority_name, cpv_domain=cpv_to_use) if authority_name else {"status": "no_data"}
     vcd = calculate_vcd(year=year, cpv_domain=cpv_to_use)
     recurrence = calculate_recurrence_signals(year=year, cpv_domain=cpv_to_use)
 
