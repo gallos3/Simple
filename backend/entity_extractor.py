@@ -234,31 +234,37 @@ def extract_entity_tokens(query: str) -> list:
     # Φίλτρο: > 3 chars, όχι stop word (σύγκριση σε normalized μορφή)
     stop_normalized = {normalize_token(w) for w in GREEK_STOP_WORDS}
     return [t for t in tokens if len(t) > 3 and t not in stop_normalized]
-def extract_entity_from_question(
-    question: str,
-    entity_cache: Dict[str, List[str]]
-) -> Optional[Dict]:
+def extract_cpv_from_question(question: str) -> Optional[str]:
+    """Detect CPV codes in a natural‑language question.
+
+    Supported patterns:
+    - "CPV 33100" or "cpv33100"
+    - plain 5–8 digit numbers (e.g. "33100")
+    - known Greek domain phrases (e.g. "ιατρικές συσκευές" → "33100")
+    Returns the CPV code as a string or ``None`` if no match is found.
     """
-    Εξάγει την αναθέτουσα αρχή από την ερώτηση.
-    
-    Returns:
-        Dict με keys: label, property, value, score, alternatives
-        ή None αν δεν βρέθηκε
-    """
-    authorities = entity_cache.get("Buyer.name", [])
-    if not authorities:
-        return None
-    
-    # Normalize και tokenize την ερώτηση
-    q_normalized = normalize_greek(question)
-    q_tokens = tokenize(q_normalized)
-    
-    # Αφαίρεσε stopwords και αριθμούς
-    q_tokens = [t for t in q_tokens if t not in STOPWORDS and normalize_greek(t) not in STOPWORDS and not t.isdigit()]
-    
-    if not q_tokens:
-        return None
-    
+    # Normalise the question (strip accents, lower‑case)
+    q = normalize_greek(question).lower()
+
+    # 1. Explicit "cpv <digits>" pattern
+    m = re.search(r"\\bcpv\\s*(\\d{5,8})\\b", q)
+    if m:
+        return m.group(1)
+
+    # 2. Stand‑alone numeric CPV (5‑8 digits)
+    m = re.search(r"\\b(\\d{5,8})\\b", q)
+    if m:
+        return m.group(1)
+
+    # 3. Simple keyword‑to‑code mappings (extendable)
+    known_mappings = {
+        "ιατρικές συσκευές": "33100",
+        "medical devices": "33100",
+    }
+    for phrase, code in known_mappings.items():
+        if phrase in q:
+            return code
+    return None    
     print(f"[SEARCH] Searching for entity in: '{question}'")
     print(f"   Tokens: {q_tokens}")
     
@@ -728,6 +734,34 @@ def extract_entity_smart(
     question: str,
     entity_cache: Dict[str, List[str]]
 ) -> Optional[Dict]:
+ 
+    # --- CPV detection FIRST (raw question, no normalization) ---
+    raw_q = question.lower()
+
+    m = re.search(r"cpv\s*(\d{5})", raw_q)
+    if m:
+        code = m.group(1)
+        print(f"[DEBUG] ✅ CPV detected (raw): {code}")
+        return {
+            "label": "CPV",
+            "property": "code",
+            "value": code,
+            "score": 5.0,
+            "alternatives": [],
+        }
+# ------------------------------------------------------------
+   # ---- CPV DETECTION (ADD THIS BLOCK FIRST) -------------------
+    cpv_code = extract_cpv_from_question(question)
+    if cpv_code:
+        print(f"[DEBUG] ✅ CPV detected: {cpv_code}")
+        return {
+            "label": "CPV",
+            "property": "code",
+            "value": cpv_code,
+            "score": 3.0,
+            "alternatives": [],
+        }
+# -------------------------------------------------------------
     """
     Smart wrapper που επιλέγει την καλύτερη μέθοδο extraction.
     """
@@ -833,3 +867,9 @@ def extract_article_from_question(question: str, entity_name: str) -> Optional[s
         pass
         
     return None
+def extract_entity_from_question(question: str, entity_cache: dict):
+    """
+    Backward-compatible wrapper for existing code.
+    Routes to extract_entity_smart.
+    """
+    return extract_entity_smart(question, entity_cache)

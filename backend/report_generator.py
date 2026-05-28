@@ -68,7 +68,7 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     # S1: Μεμονωμένες συμβάσεις > Όριο (δυναμικά από τον γράφο)
     q_s1 = '''
     MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold)
-    WHERE c.signed_date.year = $year
+    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
     AND c.Value > t.value
     RETURN c.title as Τίτλος,
            c.Value as Ποσό,
@@ -81,7 +81,7 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     # S2: Άθροιση ανά CPV > Όριο
     q_s2 = '''
     MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold)
-    WHERE c.signed_date.year = $year
+    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
     WITH cpv.code as CPV, t.value as Όριο, sum(c.Value) as Σύνολο, count(c) as Πλήθος
     WHERE Σύνολο > Όριο
     RETURN CPV, Σύνολο, Πλήθος, Όριο
@@ -91,7 +91,7 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     # S3: Άθροιση ανά CPV-5 > 30.000€ (Γενικό όριο για κλάσεις)
     q_s3 = '''
     MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)
-    WHERE c.signed_date.year = $year
+    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
     WITH left(cpv.code, 5) as CPV5, sum(c.Value) as Σύνολο, count(c) as Πλήθος
     WHERE Σύνολο > 30000
     RETURN CPV5, Σύνολο, Πλήθος
@@ -101,8 +101,8 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     # S4: Άθροιση ανά ανάδοχο > 30.000€
     q_s4 = '''
     MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:WON_BY]->(w:Winner)
-    WHERE c.signed_date.year = $year
-    WITH co.name as Ανάδοχος, sum(c.Value) as Σύνολο, count(c) as Πλήθος
+    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
+    WITH w.name as Ανάδοχος, sum(c.Value) as Σύνολο, count(c) as Πλήθος
     WHERE Σύνολο > 30000
     RETURN Ανάδοχος, Σύνολο, Πλήθος
     ORDER BY Σύνολο DESC
@@ -156,7 +156,7 @@ def get_flagged_awards_table(authority: str, year: str) -> str:
     query = '''
     MATCH (a:Buyer)-[:AWARDS]-(c:Award)
     WHERE a.name = $name 
-    AND c.signed_date.year = $year
+    AND toInteger(substring(c.signed_date, 0, 4)) = $year
     AND c.procedure IN ["6", "16"]
     AND toFloat(c.Value) > 30000
     RETURN c.title as description,
@@ -339,7 +339,7 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
     # Βρες όλες τις αρχές με απευθείας αναθέσεις > 30.000€
     query = '''
     MATCH (a:Buyer)-[:AWARDS]-(c:Award)
-    WHERE c.signed_date.year = $year
+    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
     AND c.procedure IN ["6", "16"]
     AND toFloat(c.Value) > 30000
     RETURN DISTINCT a.name as authority

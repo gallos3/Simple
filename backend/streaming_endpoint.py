@@ -256,7 +256,7 @@ def add_streaming_routes(app: Flask):
             # Optimization: Only extract entity for intents that actually need it
             # Skip entity extraction entirely for graph-only queries
             entity = None
-            if intent in ("data_simple", "data_risk", "mixed_legal_data", "report"):
+            if intent in ("data_simple", "data_risk", "mixed_legal_data", "market_diagnostic", "report"):
                 if not is_top_company_graph:
                     entity_cache = load_entity_cache()
                     entity = extract_entity_smart(question, entity_cache)
@@ -287,7 +287,7 @@ def add_streaming_routes(app: Flask):
                     return
 
             # === 4) Disambiguation check ===
-            if intent in ("data_simple", "data_risk", "mixed_legal_data", "report") and entity and entity.get("ambiguous"):
+            if intent in ("data_simple", "data_risk", "mixed_legal_data", "market_diagnostic", "report") and entity and entity.get("ambiguous"):
                 yield create_sse_event("start", {"intent": "general"})
                 time.sleep(0.1)
                 alts = entity["alternatives"]
@@ -315,7 +315,7 @@ def add_streaming_routes(app: Flask):
             yield create_sse_event("start", {"intent": intent})
             
             # For diagnostic/simulation intents, we add a small delay and a thinking message
-            if intent in ("mixed_legal_data", "procurement_simulation", "procurement_report_card"):
+            if intent in ("mixed_legal_data", "market_diagnostic", "procurement_simulation", "procurement_report_card"):
                 time.sleep(0.1)
 
 
@@ -392,7 +392,7 @@ def add_streaming_routes(app: Flask):
 
 
                 # ============ MIXED LEGAL DATA (Hybrid Diagnosis) ============
-                elif intent == "mixed_legal_data":
+                elif intent in ("mixed_legal_data", "market_diagnostic"):
                     if not entity:
                         yield create_sse_event("token", "**Ανάλυση Αγοράς (Market Diagnosis)**\n\n_Υπολογισμός Δεικτών..._\n\n")
                         from agentic_loop import tool_calculate_vcd, tool_calculate_entropy, tool_calculate_market_typology, extract_cpv_from_nl
@@ -417,7 +417,7 @@ def add_streaming_routes(app: Flask):
                             yield create_sse_event("token", f"Σφάλμα Υπολογισμού: {str(e)}")
                     else:
                         yield create_sse_event("token", "**Πόρισμα Διαγνωστικού Ελέγχου**\n\n")
-                        from diagnostic_engine import calculate_authority_diagnostics, get_diagnostic_reasoning
+                        from diagnostic_engine import calculate_full_diagnostics, get_diagnostic_reasoning
                         from agent_modules import generate_mixed_audit_answer_stream
                         
                         # 1. Legal Search via GraphRAG (no embedding model needed)
@@ -425,9 +425,21 @@ def add_streaming_routes(app: Flask):
                         passages = search_graph_corpus(search_q)
                         
                         # 2. Calculate Metrics (Fountoukidis)
-                        diag_data = calculate_authority_diagnostics(entity["value"], year)
+                        # Determine authority and CPV domain
+                        cpv_domain = None
+                        authority_name = None
+                        if entity:
+                            if entity.get("label") == "CPV":
+                                cpv_domain = entity.get("value")
+                                print(f"[DEBUG] Passing CPV to diagnostics: {cpv_domain}")
+                            else:
+                                authority_name = entity.get("value")
+                        # Fallback: ensure authority_name is set when not CPV
+                        if not authority_name:
+                            authority_name = None
+                        diag_data = calculate_full_diagnostics(authority_name, year, cpv_domain=cpv_domain)
                         diagnosis_text = get_diagnostic_reasoning(diag_data)
-                        
+
                         # 3. Stream Hybrid Answer (Metrics + Law + LLM)
                         for token in generate_mixed_audit_answer_stream(
                             question, entity["value"], year, {}, passages, diag_data, diagnosis_text

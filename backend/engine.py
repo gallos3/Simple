@@ -62,12 +62,25 @@ def _pick_followup_candidate(
                 return prompt_text, qdef
     return None
 
-def detect_intent(question: str, history: list = None) -> str:
+def detect_intent(question: str, entity=None, history: list = None) -> str:
     """Ανιχνεύει το intent της ερώτησης με χρήση normalization."""
-    from entity_extractor import normalize_greek
+    from entity_extractor import normalize_greek, load_entity_cache, extract_entity_from_question
+    
+    if isinstance(entity, list):
+        history = entity
+        entity = None
+        
+    if entity is None or not isinstance(entity, dict):
+        entity_cache = load_entity_cache()
+        entity = extract_entity_from_question(question, entity_cache)
+        
     q_raw = question.lower()
     q = normalize_greek(q_raw)
-
+    # ---- CPV diagnostic override ------------------------------
+    if entity and entity.get("label") == "CPV":
+        print("[DEBUG] ✅ Routing to market_diagnostic")
+        return "market_diagnostic"
+    # -----------------------------------------------------------
     # 1. Έκθεση / report (Απόλυτη προτεραιότητα - γρήγορο check)
     report_keywords = ["εκθεση", "αναφορα", "report", "audit", "pdf", "docx", "κατεβασμα"]
     if any(k in q for k in report_keywords):
@@ -164,7 +177,7 @@ def detect_intent(question: str, history: list = None) -> str:
     from social_handler import handle_social_query
     if handle_social_query(question):
         return "social"
-
+    print(f"[DEBUG] FINAL ENTITY: {entity}")
     return "general"
 
 
@@ -628,7 +641,9 @@ def agent_answer(question: str, previous_question: str = "", from_voice: bool = 
         return run_illegal_direct_awards_playbook(merged_illegal, from_voice=from_voice)
 
     # 2) Κανονικός χειρισμός intent, όπως πριν
-    intent = detect_intent(question)
+    entity = extract_entity_from_question(question, entity_cache)
+    intent = detect_intent(question, entity, history)
+
     print(f"   Detected intent: {intent}")
 
     # === PERMISSION GUARD ===
@@ -711,7 +726,7 @@ def agent_answer(question: str, previous_question: str = "", from_voice: bool = 
 
     if entity and entity.get("ambiguous"):
         # Let the ReAct Agent handle ambiguity if routed there, otherwise block
-        if intent not in ["mixed_legal_data", "general"]:
+        if intent not in ["mixed_legal_data", "market_diagnostic", "general"]:
             return (
                 "Υπάρχουν περισσότερες από μία αναθέτουσες αρχές με αυτό το όνομα. "
                 "Παρακαλώ γράψε ολόκληρη την επωνυμία της αναθέτουσας αρχής."
@@ -725,7 +740,7 @@ def agent_answer(question: str, previous_question: str = "", from_voice: bool = 
         return _handle_report_request(question, from_voice=from_voice)
 
     # === 3. MIXED (ΔΗΛΑΔΗ Νομικό + Δεδομένα, ή Διαγνωστικά, ή Agentic) ===
-    if intent == "mixed_legal_data":
+    if intent in ["mixed_legal_data", "market_diagnostic"]:
         authority = entity["value"] if (entity and not entity.get("ambiguous")) else "Ολόκληρη η Αγορά / Απροσδιόριστο"
         
         # Χρήση του νέου ReAct Agent
@@ -740,7 +755,7 @@ def agent_answer(question: str, previous_question: str = "", from_voice: bool = 
         # Cache it (data type has shorter TTL)
         get_cag_cache().add(question, base_answer, query_type="data")
         
-        return _maybe_attach_followup(question, entity, year, base_answer, intent="mixed_legal_data")
+        return _maybe_attach_followup(question, entity, year, base_answer, intent=intent)
 
 
     # === 4. DATA RISK ===

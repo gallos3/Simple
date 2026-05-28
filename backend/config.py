@@ -162,7 +162,7 @@ ROLE_TRAINEE = "TRAINEE"
 # Mapping of roles to allowed intents
 ROLE_PERMISSIONS = {
     ROLE_AUDITOR: [
-        "report", "legal", "mixed_legal_data", 
+        "report", "legal", "mixed_legal_data", "market_diagnostic",
         "data_risk", "data_simple", "general", 
         "procurement_simulation"
     ],
