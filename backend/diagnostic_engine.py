@@ -83,10 +83,15 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
         return {"status": "no_data"}
 
     year_filter = f"AND substring(c.submission_date, 0, 4) = '{year}'" if year else ""
+    cpv_filter = "AND c.cpv_code STARTS WITH $cpv_domain" if cpv_domain else ""
+    params = {"authority": authority_name}
+    if cpv_domain:
+        params["cpv_domain"] = cpv_domain
+
     cypher = f"""
     MATCH (u:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(w:Winner)
     WHERE ANY(n IN u.name WHERE n = $authority)
-      AND c.submission_date IS NOT NULL {year_filter}
+      AND c.submission_date IS NOT NULL {year_filter} {cpv_filter}
     WITH w.name AS company, sum(toFloat(coalesce(c.value, 0.0))) AS total_val
     WITH collect(total_val) AS vals, sum(total_val) AS grand_total, count(DISTINCT company) AS diversity
     WHERE grand_total > 0
@@ -94,13 +99,13 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
            [v IN vals | (v/grand_total)*(v/grand_total)] AS hhi_components,
            reduce(m=0.0, v IN vals | CASE WHEN v > m THEN v ELSE m END) / grand_total AS top_share
     """
-    results = execute_cypher(cypher, {"authority": authority_name}, format_output=False)
+    results = execute_cypher(cypher, params, format_output=False)
 
     if not isinstance(results, list) or not results:
         # Fallback: try without year filter
-        cypher_fb = """
+        cypher_fb = f"""
     MATCH (u:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(w:Winner)
-    WHERE ANY(n IN u.name WHERE n = $authority)
+    WHERE ANY(n IN u.name WHERE n = $authority) {cpv_filter}
     WITH w.name AS company, sum(toFloat(coalesce(c.value, 0.0))) AS total_val
     WITH collect(total_val) AS vals, sum(total_val) AS grand_total, count(DISTINCT company) AS diversity
     WHERE grand_total > 0
@@ -108,7 +113,7 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
            [v IN vals | (v/grand_total)*(v/grand_total)] AS hhi_components,
            reduce(m=0.0, v IN vals | CASE WHEN v > m THEN v ELSE m END) / grand_total AS top_share
         """
-        results = execute_cypher(cypher_fb, {"authority": authority_name}, format_output=False)
+        results = execute_cypher(cypher_fb, params, format_output=False)
 
     if not isinstance(results, list) or not results:
         return {"status": "no_data"}
