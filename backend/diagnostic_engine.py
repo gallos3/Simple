@@ -90,7 +90,7 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
 
     cypher = f"""
     MATCH (u:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(w:Winner)
-    WHERE ANY(n IN u.name WHERE n = $authority)
+    WHERE toUpper(u.name) CONTAINS toUpper($authority)
       AND c.submission_date IS NOT NULL {year_filter} {cpv_filter}
     WITH w.name AS company, sum(toFloat(coalesce(c.value, 0.0))) AS total_val
     WITH collect(total_val) AS vals, sum(total_val) AS grand_total, count(DISTINCT company) AS diversity
@@ -105,7 +105,7 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
         # Fallback: try without year filter
         cypher_fb = f"""
     MATCH (u:Buyer)-[:AWARDS]-(c:Award)-[:WON_BY]-(w:Winner)
-    WHERE ANY(n IN u.name WHERE n = $authority) {cpv_filter}
+    WHERE toUpper(u.name) CONTAINS toUpper($authority) {cpv_filter}
     WITH w.name AS company, sum(toFloat(coalesce(c.value, 0.0))) AS total_val
     WITH collect(total_val) AS vals, sum(total_val) AS grand_total, count(DISTINCT company) AS diversity
     WHERE grand_total > 0

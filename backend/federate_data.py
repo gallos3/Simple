@@ -1,13 +1,17 @@
 """
 Simple_Federated - Federated Data Ingestor (ETL)
 ==================================================
-3-Phase approach (λόγω ξεχωριστών DBMS instances):
+4-Phase approach (λόγω ξεχωριστών DBMS instances):
 
-  Phase A: Start KHMDHS1  python federate_data.py --extract kimdis
-  Phase B: Start Endorse   python federate_data.py --extract ted
-  Phase C: Start federated  python federate_data.py --load
+  Phase A: Extract        python federate_data.py --extract kimdis
+                           python federate_data.py --extract ted
+  Phase B: Normalize      (automatic during --load)
+  Phase C: Register       Buyer/Winner nodes created HERE ONLY
+  Phase D: Load Awards    OPTIONAL MATCH Buyer — never MERGE
 
 ΚΑΝΟΝΑΣ ΑΣΦΑΛΕΙΑΣ: Ποτέ δεν γράφει στις πηγές. Μόνο READ.
+BUYER INVARIANT:   Buyer nodes created ONLY in Phase C (entity registration).
+                   Award insertion uses OPTIONAL MATCH — never creates Buyers.
 """
 
 import argparse
@@ -45,6 +49,207 @@ KIMDIS_FILE = DATA_DIR / "kimdis_extract.json"
 ENDORSE_FILE = DATA_DIR / "endorse_extract.json"
 
 BATCH_SIZE = 5000
+
+
+# =============================================================================
+# BUYER NAME NORMALIZATION
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Abbreviation → canonical expansion (token-level, exact match)
+# ---------------------------------------------------------------------------
+_ABBREV_EXPANSIONS = {
+    # University Hospitals
+    "ΠΓΝΘ":  "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΠΑΓΝΗ": "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΗΡΑΚΛΕΙΟΥ",
+    "ΠΓΝΑ":  "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ",
+    "ΠΓΝΛ":  "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΛΑΡΙΣΑΣ",
+    "ΠΓΝΙ":  "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΙΩΑΝΝΙΝΩΝ",
+    "ΠΓΝΠ":  "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΠΑΤΡΩΝ",
+    # General Hospitals
+    "ΓΝΘ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΓΝΑ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΑΘΗΝΩΝ",
+    "ΓΝΛ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΛΑΡΙΣΑΣ",
+    "ΓΝΠ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΠΑΤΡΩΝ",
+    "ΓΝΚ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΚΕΡΚΥΡΑΣ",
+    "ΓΝΧ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΧΑΝΙΩΝ",
+    "ΓΝΒ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΒΟΛΟΥ",
+    "ΓΝΤ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΤΡΙΚΑΛΩΝ",
+    "ΓΝΡ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΡΟΔΟΥ",
+    "ΓΝΕ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΕΛΕΥΣΙΝΑΣ",
+    "ΓΝΜ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΜΥΤΙΛΗΝΗΣ",
+    "ΓΝΙ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΙΩΑΝΝΙΝΩΝ",
+    "ΓΝΚ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΚΑΒΑΛΑΣ",
+    "ΓΝΣ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΣΕΡΡΩΝ",
+    "ΓΝΚΟΜ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΚΟΜΟΤΗΝΗΣ",
+    "ΓΝΚΟΖ": "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΚΟΖΑΝΗΣ",
+    # Short-form generics
+    "ΓΝ":  "ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ",
+    "ΠΓΝ": "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ",
+    "ΝΟΣ": "ΝΟΣΟΚΟΜΕΙΟ",
+    "ΠΝ":  "ΠΑΙΔΙΚΟ ΝΟΣΟΚΟΜΕΙΟ",
+    "ΨΝ":  "ΨΥΧΙΑΤΡΙΚΟ ΝΟΣΟΚΟΜΕΙΟ",
+    "ΨΝΑ": "ΨΥΧΙΑΤΡΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΑΤΤΙΚΗΣ",
+    "ΨΝΘ": "ΨΥΧΙΑΤΡΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΑΝΘ": "ΑΝΤΙΚΑΡΚΙΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΚΥ":  "ΚΕΝΤΡΟ ΥΓΕΙΑΣ",
+    "ΚΕΕΛΠΝΟ": "ΚΕΝΤΡΟ ΕΛΕΓΧΟΥ ΚΑΙ ΠΡΟΛΗΨΗΣ ΝΟΣΗΜΑΤΩΝ",
+    "ΕΟΠΥΥ": "ΕΘΝΙΚΟΣ ΟΡΓΑΝΙΣΜΟΣ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ ΥΓΕΙΑΣ",
+    "ΕΚΑΒ": "ΕΘΝΙΚΟ ΚΕΝΤΡΟ ΑΜΕΣΗΣ ΒΟΗΘΕΙΑΣ",
+    "ΕΟΦ": "ΕΘΝΙΚΟΣ ΟΡΓΑΝΙΣΜΟΣ ΦΑΡΜΑΚΩΝ",
+    # Universities
+    "ΑΠΘ":  "ΑΡΙΣΤΟΤΕΛΕΙΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΕΚΠΑ": "ΕΘΝΙΚΟ ΚΑΙ ΚΑΠΟΔΙΣΤΡΙΑΚΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΑΘΗΝΩΝ",
+    "ΕΜΠ":  "ΕΘΝΙΚΟ ΜΕΤΣΟΒΙΟ ΠΟΛΥΤΕΧΝΕΙΟ",
+    "ΠΘ":   "ΠΑΝΕΠΙΣΤΗΜΙΟ ΘΕΣΣΑΛΙΑΣ",
+    "ΠΠ":   "ΠΑΝΕΠΙΣΤΗΜΙΟ ΠΑΤΡΩΝ",
+    "ΠΙ":   "ΠΑΝΕΠΙΣΤΗΜΙΟ ΙΩΑΝΝΙΝΩΝ",
+    "ΠΚ":   "ΠΑΝΕΠΙΣΤΗΜΙΟ ΚΡΗΤΗΣ",
+    "ΔΠΘ":  "ΔΗΜΟΚΡΙΤΕΙΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΘΡΑΚΗΣ",
+    "ΟΠΑ":  "ΟΙΚΟΝΟΜΙΚΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΑΘΗΝΩΝ",
+    "ΠΑΔΑ": "ΠΑΝΕΠΙΣΤΗΜΙΟ ΔΥΤΙΚΗΣ ΑΤΤΙΚΗΣ",
+    "ΠΑΜΑΚ": "ΠΑΝΕΠΙΣΤΗΜΙΟ ΜΑΚΕΔΟΝΙΑΣ",
+    "ΤΕΙ":  "ΤΕΧΝΟΛΟΓΙΚΟ ΕΚΠΑΙΔΕΥΤΙΚΟ ΙΔΡΥΜΑ",
+    # Public utilities / Organizations
+    "ΔΕΗ":   "ΔΗΜΟΣΙΑ ΕΠΙΧΕΙΡΗΣΗ ΗΛΕΚΤΡΙΣΜΟΥ",
+    "ΔΕΔΔΗΕ": "ΔΙΑΧΕΙΡΙΣΤΗΣ ΕΛΛΗΝΙΚΟΥ ΔΙΚΤΥΟΥ ΔΙΑΝΟΜΗΣ ΗΛΕΚΤΡΙΚΗΣ ΕΝΕΡΓΕΙΑΣ",
+    "ΑΔΜΗΕ": "ΑΝΕΞΑΡΤΗΤΟΣ ΔΙΑΧΕΙΡΙΣΤΗΣ ΜΕΤΑΦΟΡΑΣ ΗΛΕΚΤΡΙΚΗΣ ΕΝΕΡΓΕΙΑΣ",
+    "ΕΥΔΑΠ": "ΕΤΑΙΡΕΙΑ ΥΔΡΕΥΣΕΩΣ ΚΑΙ ΑΠΟΧΕΤΕΥΣΕΩΣ ΠΡΩΤΕΥΟΥΣΗΣ",
+    "ΕΥΑΘ":  "ΕΤΑΙΡΕΙΑ ΥΔΡΕΥΣΕΩΣ ΚΑΙ ΑΠΟΧΕΤΕΥΣΕΩΣ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΟΑΣΑ":  "ΟΡΓΑΝΙΣΜΟΣ ΑΣΤΙΚΩΝ ΣΥΓΚΟΙΝΩΝΙΩΝ ΑΘΗΝΩΝ",
+    "ΟΑΣΘ":  "ΟΡΓΑΝΙΣΜΟΣ ΑΣΤΙΚΩΝ ΣΥΓΚΟΙΝΩΝΙΩΝ ΘΕΣΣΑΛΟΝΙΚΗΣ",
+    "ΟΣΕ":   "ΟΡΓΑΝΙΣΜΟΣ ΣΙΔΗΡΟΔΡΟΜΩΝ ΕΛΛΑΔΑΣ",
+    "ΟΤΕ":   "ΟΡΓΑΝΙΣΜΟΣ ΤΗΛΕΠΙΚΟΙΝΩΝΙΩΝ ΕΛΛΑΔΑΣ",
+    "ΕΛΤΑ":  "ΕΛΛΗΝΙΚΑ ΤΑΧΥΔΡΟΜΕΙΑ",
+    "ΟΑΕΔ":  "ΟΡΓΑΝΙΣΜΟΣ ΑΠΑΣΧΟΛΗΣΕΩΣ ΕΡΓΑΤΙΚΟΥ ΔΥΝΑΜΙΚΟΥ",
+    "ΔΥΠΑ":  "ΔΗΜΟΣΙΑ ΥΠΗΡΕΣΙΑ ΑΠΑΣΧΟΛΗΣΗΣ",
+    "ΕΦΚΑ":  "ΕΝΙΑΙΟΣ ΦΟΡΕΑΣ ΚΟΙΝΩΝΙΚΗΣ ΑΣΦΑΛΙΣΗΣ",
+    "ΙΚΑ":   "ΙΔΡΥΜΑ ΚΟΙΝΩΝΙΚΩΝ ΑΣΦΑΛΙΣΕΩΝ",
+    "ΕΦΕΤ":  "ΕΝΙΑΙΟΣ ΦΟΡΕΑΣ ΕΛΕΓΧΟΥ ΤΡΟΦΙΜΩΝ",
+    "ΕΛΓΑ":  "ΕΛΛΗΝΙΚΟΣ ΓΕΩΡΓΙΚΟΣ ΟΡΓΑΝΙΣΜΟΣ",
+    # Military / Security
+    "ΓΕΣ": "ΓΕΝΙΚΟ ΕΠΙΤΕΛΕΙΟ ΣΤΡΑΤΟΥ",
+    "ΓΕΝ": "ΓΕΝΙΚΟ ΕΠΙΤΕΛΕΙΟ ΝΑΥΤΙΚΟΥ",
+    "ΓΕΑ": "ΓΕΝΙΚΟ ΕΠΙΤΕΛΕΙΟ ΑΕΡΟΠΟΡΙΑΣ",
+    "ΕΛ.ΑΣ": "ΕΛΛΗΝΙΚΗ ΑΣΤΥΝΟΜΙΑ",
+    "ΕΛΑΣ": "ΕΛΛΗΝΙΚΗ ΑΣΤΥΝΟΜΙΑ",
+    # Government
+    "ΥΠ": "ΥΠΟΥΡΓΕΙΟ",
+    "ΥΠΕΞ": "ΥΠΟΥΡΓΕΙΟ ΕΞΩΤΕΡΙΚΩΝ",
+    "ΥΠΟΙΚ": "ΥΠΟΥΡΓΕΙΟ ΟΙΚΟΝΟΜΙΚΩΝ",
+    "ΥΠΕΣ": "ΥΠΟΥΡΓΕΙΟ ΕΣΩΤΕΡΙΚΩΝ",
+    "ΥΠΑΙΘ": "ΥΠΟΥΡΓΕΙΟ ΠΑΙΔΕΙΑΣ ΚΑΙ ΘΡΗΣΚΕΥΜΑΤΩΝ",
+    "ΥΠΥΓ": "ΥΠΟΥΡΓΕΙΟ ΥΓΕΙΑΣ",
+    # Local government
+    "ΠΕ": "ΠΕΡΙΦΕΡΕΙΑΚΗ ΕΝΟΤΗΤΑ",
+    "ΔΗΜ": "ΔΗΜΟΣ",
+}
+
+# ---------------------------------------------------------------------------
+# Canonical phrase table — multi-word patterns that must converge.
+# Applied AFTER token-level expansion to catch full-name variants.
+# Order matters: longer phrases first to avoid partial matches.
+# ---------------------------------------------------------------------------
+_CANONICAL_PHRASES = [
+    # Ensure both directions converge: full-name ↔ abbreviation
+    # University hospitals
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΘΕΣΣΑΛΟΝΙΚΗΣ"),
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΗΡΑΚΛΕΙΟΥ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΗΡΑΚΛΕΙΟΥ"),
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ"),
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΛΑΡΙΣΑΣ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΛΑΡΙΣΑΣ"),
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΙΩΑΝΝΙΝΩΝ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΙΩΑΝΝΙΝΩΝ"),
+    ("ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΠΑΤΡΩΝ", "ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ ΓΕΝΙΚΟ ΝΟΣΟΚΟΜΕΙΟ ΠΑΤΡΩΝ"),
+    # Common variant: ΠΑΝ. → ΠΑΝΕΠΙΣΤΗΜΙΑΚΟ (already handled by abbreviation expansion above)
+    # Common variant: ΓΕΝΙΚΟ → ΓΕΝ. (single-letter rejoin handles dots)
+
+    # ΕΚΠΑ variant: "ΕΘΝΙΚΟ ΚΑΠΟΔΙΣΤΡΙΑΚΟ" vs "ΕΘΝΙΚΟ ΚΑΙ ΚΑΠΟΔΙΣΤΡΙΑΚΟ"
+    ("ΕΘΝΙΚΟ ΚΑΠΟΔΙΣΤΡΙΑΚΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΑΘΗΝΩΝ", "ΕΘΝΙΚΟ ΚΑΙ ΚΑΠΟΔΙΣΤΡΙΑΚΟ ΠΑΝΕΠΙΣΤΗΜΙΟ ΑΘΗΝΩΝ"),
+
+    # ΕΥΔΑΠ: "ΥΔΡΕΥΣΕΩΣ ΑΠΟΧΕΤΕΥΣΕΩΣ" vs "ΥΔΡΕΥΣΕΩΣ ΚΑΙ ΑΠΟΧΕΤΕΥΣΕΩΣ"
+    ("ΥΔΡΕΥΣΕΩΣ ΑΠΟΧΕΤΕΥΣΕΩΣ", "ΥΔΡΕΥΣΕΩΣ ΚΑΙ ΑΠΟΧΕΤΕΥΣΕΩΣ"),
+]
+
+
+# Whole-word keywords that indicate a document title, never an authority name
+_TITLE_KEYWORDS = {
+    "ΔΙΑΚΗΡΥΞΗ", "ΔΙΑΚΗΡΥΞΗΣ", "ΔΙΑΚΗΡΥΞΕΩΝ",
+    "ΠΡΟΚΗΡΥΞΗ", "ΠΡΟΚΗΡΥΞΗΣ",
+    "ΠΛΥΝΤΗΡΙΑ", "ΠΛΥΝΤΗΡΙΩΝ",
+    "TRANSDUCERS", "TRANDUCERS",
+}
+
+
+def _normalize_buyer_name(raw_name):
+    """
+    Deterministic normalization for Buyer names.
+    Returns canonical uppercase form, or None if invalid/title-like.
+
+    Pipeline:
+      1. Strip & reject empty/None
+      2. Remove Greek accents/diacritics (NFD → strip Mn → NFC)
+      3. UPPERCASE
+      4. Replace punctuation with spaces
+      5. Collapse whitespace
+      6. Rejoin single uppercase-Greek-letter runs (Π Γ Ν Θ → ΠΓΝΘ)
+      7. Expand abbreviations (token-level)
+      8. Apply canonical phrase normalization (multi-word convergence)
+      9. Reject if any token is a known title keyword
+    """
+    if not raw_name or not str(raw_name).strip():
+        return None
+
+    name = str(raw_name).strip()
+
+    # 2. Remove accents
+    name = unicodedata.normalize("NFD", name)
+    name = "".join(c for c in name if unicodedata.category(c) != "Mn")
+    name = unicodedata.normalize("NFC", name)
+
+    # 3. Uppercase
+    name = name.upper()
+
+    # 4. Replace punctuation with spaces
+    name = re.sub(r"[^\w\s]", " ", name)
+    name = name.replace("_", " ")
+
+    # 5. Collapse whitespace
+    name = re.sub(r"\s+", " ", name).strip()
+
+    if not name:
+        return None
+
+    # 6. Rejoin single uppercase-Greek-letter runs (e.g. "Π Γ Ν Θ" → "ΠΓΝΘ")
+    tokens = name.split()
+    rejoined = []
+    buf = []
+    for t in tokens:
+        if len(t) == 1 and "\u0391" <= t <= "\u03A9":
+            buf.append(t)
+        else:
+            if buf:
+                rejoined.append("".join(buf))
+                buf = []
+            rejoined.append(t)
+    if buf:
+        rejoined.append("".join(buf))
+    tokens = rejoined
+
+    # 7. Expand abbreviations (token-level)
+    expanded = [_ABBREV_EXPANSIONS.get(t, t) for t in tokens]
+    name = " ".join(expanded)
+
+    # 8. Canonical phrase normalization (multi-word convergence)
+    for variant, canonical in _CANONICAL_PHRASES:
+        name = name.replace(variant, canonical)
+
+    # 9. Final whitespace cleanup after phrase replacement
+    name = re.sub(r"\s+", " ", name).strip()
+
+    # 10. Reject title-like strings
+    if set(name.split()) & _TITLE_KEYWORDS:
+        return None
+
+    return name
 
 
 # =============================================================================
@@ -135,7 +340,7 @@ def extract_kimdis():
                 "awr": {k: awr[k] for k in ["cost_without_vat", "protocol_num", "nuts_code",
                         "ici_deg", "contract_type", "cancellation", "title",
                         "submission_date", "ref"] if k in awr},
-                "buyer_name": unit.get("nameRaw") or unit.get("nameNorm", ""),
+                "buyer_name": _normalize_buyer_name(unit.get("nameRaw")) or _normalize_buyer_name(unit.get("nameNorm")),
                 "buyer_nuts": unit.get("nuts_code"),
                 "buyer_vat": r.get("auth_vat"),
                 "winner_name": comp.get("nameRaw") or comp.get("nameNorm", ""),
@@ -179,7 +384,7 @@ def extract_endorse():
     buyers = []
     for r in buyers_raw:
         p = r.get("props") or {}
-        p["name"] = p.get("legalName") or p.get("officialName")
+        p["name"] = _normalize_buyer_name(p.get("legalNameKey")) or _normalize_buyer_name(p.get("legalName")) or _normalize_buyer_name(p.get("officialName"))
         p["nuts_code"] = p.get("nuts3") or p.get("nuts_code") # Map nuts3 to nuts_code for consistency
         buyers.append(p)
     print(f"    Buyers: {len(buyers)}")
@@ -240,7 +445,7 @@ def extract_endorse():
                         for auth in auth_list:
                             aw_dict = {
                                 "ca": {k: ca[k] for k in ["contractValue", "value", "awardYear", "year", "identifier", "deg", "mainCPV"] if k in ca},
-                                "buyer_name": auth.get("legalName") or auth.get("officialName"),
+                                "buyer_name": _normalize_buyer_name(auth.get("legalNameKey")) or _normalize_buyer_name(auth.get("legalName")) or _normalize_buyer_name(auth.get("officialName")),
                                 "buyer_vat": auth.get("VATNumber") or auth.get("vat"),
                                 "buyer_nuts": auth.get("nuts3") or auth.get("nuts_code") or auth.get("nuts"),
                                 "winner_name": comp.get("legalName"),
@@ -284,10 +489,8 @@ class EntityRegistry:
         return clean if len(clean) >= 5 else None
 
     def _normalize(self, name):
-        if not name: return ""
-        n = name.lower()
-        n = "".join(c for c in unicodedata.normalize("NFD", n) if unicodedata.category(c) != "Mn")
-        return re.sub(r"[^\w\s]", "", n).replace(" ", "")
+        """Normalize name for index lookup — delegates to _normalize_buyer_name for consistency."""
+        return _normalize_buyer_name(name) or ""
 
     def register_buyer(self, buyer_data, source):
         vat = buyer_data.get("vat") or buyer_data.get("VATNumber")
@@ -372,14 +575,18 @@ def load_to_federated(dry_run=False):
     if KIMDIS_FILE.exists():
         print("   Streaming KIMDIS Buyers...")
         with open(KIMDIS_FILE, "rb") as f:
+            total_kimdis = 0
             for b in ijson.items(f, 'buyers.item', use_float=True):
-                registry.register_buyer({"name": b.get("unit_name") or b.get("name"), "vat": b.get("vat") or b.get("afm"), "nuts_code": b.get("nuts_code")}, "KIMDIS_API")
+                total_kimdis += 1
+                registry.register_buyer({"name": _normalize_buyer_name(b.get("unit_name")) or _normalize_buyer_name(b.get("name")), "vat": b.get("vat") or b.get("afm"), "nuts_code": b.get("nuts_code")}, "KIMDIS_API")
 
     if ENDORSE_FILE.exists():
         print("   Streaming ENDORSE Buyers...")
         with open(ENDORSE_FILE, "rb") as f:
+            total_endorse = 0
             for b in ijson.items(f, 'buyers.item', use_float=True):
-                registry.register_buyer({"name": b.get("name"), "vat": b.get("VATNumber"), "nuts_code": b.get("nuts_code")}, "TED")
+                total_endorse += 1
+                registry.register_buyer({"name": _normalize_buyer_name(b.get("name")), "vat": b.get("VATNumber"), "nuts_code": b.get("nuts_code")}, "TED")
 
     # 2. Register Winners
     seen = set()
@@ -452,6 +659,37 @@ def load_to_federated(dry_run=False):
         """, chunk)
     print(f"    {len(winners_list)} winners loaded")
 
+    # Build valid buyer name set for award-phase validation
+    valid_buyer_names = {b["name"] for b in registry.buyers if b.get("name")}
+    unresolved_awards = []  # log entries for awards with no matching Buyer
+
+    # Build VAT → canonical buyer name bridge (Tier 2 resolution)
+    vat_to_buyer_name = {}
+    for vat, buyer in registry._buyer_vat_idx.items():
+        bname = buyer.get("name")
+        if bname and bname in valid_buyer_names:
+            vat_to_buyer_name[vat] = bname
+    print(f"    VAT→Name bridge: {len(vat_to_buyer_name)} entries")
+
+    # Award insertion Cypher — Buyer is OPTIONAL MATCH (never created here)
+    _AWARD_CYPHER_KIMDIS = """
+        UNWIND $batch AS row
+        MERGE (a:Award {identifier: row.identifier})
+        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value),
+            a.deg = toFloat(row.deg), a.cpv_code = row.cpv, a.nuts_code = row.nuts,
+            a.title = row.title, a.submission_date = row.date,
+            a.source = "KIMDIS_API", a.ingested_at = datetime(),
+            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
+        WITH a, row
+        OPTIONAL MATCH (b:Buyer {name: row.buyer})
+        FOREACH (_ IN CASE WHEN b IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (b)-[:AWARDS]->(a)
+        )
+        WITH a, row WHERE row.winner IS NOT NULL
+        MERGE (w:Winner {name: row.winner})
+        MERGE (a)-[:WON_BY]->(w)
+    """
+
     # Insert Awards (KIMDIS)
     if KIMDIS_FILE.exists():
         print("    Inserting KIMDIS awards...")
@@ -466,8 +704,20 @@ def load_to_federated(dry_run=False):
                 orig_id = str(awr.get("ref") or "")
                 if not orig_id or orig_id == "UNKNOWN" or orig_id == "None":
                     orig_id = "UNKNOWN_" + uuid.uuid4().hex
+                # Tier 1: normalized name
+                buyer_key = _normalize_buyer_name(a.get("buyer_name"))
+                if buyer_key and buyer_key not in valid_buyer_names:
+                    buyer_key = None
+                # Tier 2: VAT bridge
+                if not buyer_key and a.get("buyer_vat"):
+                    clean_vat = re.sub(r"[^0-9]", "", str(a["buyer_vat"]))
+                    if len(clean_vat) >= 5:
+                        buyer_key = vat_to_buyer_name.get(clean_vat)
+                # Tier 3: unresolved
+                if not buyer_key:
+                    unresolved_awards.append({"source": "KIMDIS_API", "id": orig_id, "raw_buyer": a.get("buyer_name"), "raw_vat": a.get("buyer_vat")})
                 batch.append({
-                    "buyer": a.get("buyer_name") or "UNKNOWN",
+                    "buyer": buyer_key,
                     "id": orig_id,
                     "identifier": "KIMDIS_" + orig_id,
                     "value": awr.get("cost_without_vat"),
@@ -477,42 +727,31 @@ def load_to_federated(dry_run=False):
                     "winner": a.get("winner_name"),
                     "title": awr.get("title"),
                     "date": awr.get("submission_date"),
-                    "buyer_vat": a.get("buyer_vat")
                 })
                 if len(batch) >= BATCH_SIZE:
-                    conn.write_batch("""
-                        UNWIND $batch AS row
-                        MERGE (b:Buyer {name: row.buyer})
-                        SET b.vat = coalesce(b.vat, row.buyer_vat), b.nuts_code = coalesce(b.nuts_code, row.nuts)
-                        MERGE (a:Award {identifier: row.identifier})
-                        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value), 
-                            a.deg = toFloat(row.deg), a.cpv_code = row.cpv, a.nuts_code = row.nuts,
-                            a.title = row.title, a.submission_date = row.date,
-                            a.source = "KIMDIS_API", a.ingested_at = datetime(),
-                            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
-                        MERGE (b)-[:AWARDS]->(a)
-                        WITH a, row WHERE row.winner IS NOT NULL
-                        MERGE (w:Winner {name: row.winner})
-                        MERGE (a)-[:WON_BY]->(w)
-                    """, batch)
+                    conn.write_batch(_AWARD_CYPHER_KIMDIS, batch)
                     batch = []
         if batch:
-            conn.write_batch("""
-                        UNWIND $batch AS row
-                        MERGE (b:Buyer {name: row.buyer})
-                        SET b.vat = coalesce(b.vat, row.buyer_vat), b.nuts_code = coalesce(b.nuts_code, row.nuts)
-                        MERGE (a:Award {identifier: row.identifier})
-                        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value), 
-                            a.deg = toFloat(row.deg), a.cpv_code = row.cpv, a.nuts_code = row.nuts,
-                            a.title = row.title, a.submission_date = row.date,
-                            a.source = "KIMDIS_API", a.ingested_at = datetime(),
-                            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
-                        MERGE (b)-[:AWARDS]->(a)
-                        WITH a, row WHERE row.winner IS NOT NULL
-                        MERGE (w:Winner {name: row.winner})
-                        MERGE (a)-[:WON_BY]->(w)
-            """, batch)
+            conn.write_batch(_AWARD_CYPHER_KIMDIS, batch)
             
+    # Award insertion Cypher — ENDORSE (Buyer is OPTIONAL MATCH, never created here)
+    _AWARD_CYPHER_ENDORSE = """
+        UNWIND $batch AS row
+        MERGE (a:Award {identifier: row.identifier})
+        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value), a.year = toInteger(row.year),
+            a.deg = row.deg, a.cpv_code = row.cpv, a.nuts_code = row.nuts,
+            a.source = "TED", a.ingested_at = datetime(),
+            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
+        WITH a, row
+        OPTIONAL MATCH (b:Buyer {name: row.buyer})
+        FOREACH (_ IN CASE WHEN b IS NOT NULL THEN [1] ELSE [] END |
+            MERGE (b)-[:AWARDS]->(a)
+        )
+        WITH a, row WHERE row.winner IS NOT NULL
+        MERGE (w:Winner {name: row.winner})
+        MERGE (a)-[:WON_BY]->(w)
+    """
+
     # Insert Awards (ENDORSE)
     if ENDORSE_FILE.exists():
         print("    Inserting ENDORSE awards...")
@@ -523,8 +762,15 @@ def load_to_federated(dry_run=False):
                 orig_id = str(ca.get("identifier") or "")
                 if not orig_id or orig_id == "UNKNOWN" or orig_id == "None":
                     orig_id = "UNKNOWN_" + uuid.uuid4().hex
+                # Canonical name resolution (from legalNameKey / legalName)
+                buyer_key = _normalize_buyer_name(a.get("buyer_name"))
+                if buyer_key and buyer_key not in valid_buyer_names:
+                    buyer_key = None
+                # Unresolved
+                if not buyer_key:
+                    unresolved_awards.append({"source": "TED", "id": orig_id, "raw_buyer": a.get("buyer_name")})
                 batch.append({
-                    "buyer": a.get("buyer_name") or "UNKNOWN",
+                    "buyer": buyer_key,
                     "id": orig_id,
                     "identifier": "TED_" + orig_id,
                     "value": ca.get("value") or ca.get("contractValue"),
@@ -533,39 +779,12 @@ def load_to_federated(dry_run=False):
                     "cpv": ca.get("mainCPV"),
                     "nuts": a.get("buyer_nuts"),
                     "winner": a.get("winner_name"),
-                    "buyer_vat": a.get("buyer_vat")
                 })
                 if len(batch) >= BATCH_SIZE:
-                    conn.write_batch("""
-                        UNWIND $batch AS row
-                        MERGE (b:Buyer {name: row.buyer})
-                        SET b.vat = coalesce(b.vat, row.buyer_vat), b.nuts_code = coalesce(b.nuts_code, row.nuts)
-                        MERGE (a:Award {identifier: row.identifier})
-                        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value), a.year = toInteger(row.year),
-                            a.deg = row.deg, a.cpv_code = row.cpv, a.nuts_code = row.nuts,
-                            a.source = "TED", a.ingested_at = datetime(),
-                            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
-                        MERGE (b)-[:AWARDS]->(a)
-                        WITH a, row WHERE row.winner IS NOT NULL
-                        MERGE (w:Winner {name: row.winner})
-                        MERGE (a)-[:WON_BY]->(w)
-                    """, batch)
+                    conn.write_batch(_AWARD_CYPHER_ENDORSE, batch)
                     batch = []
         if batch:
-            conn.write_batch("""
-                        UNWIND $batch AS row
-                        MERGE (b:Buyer {name: row.buyer})
-                        SET b.vat = coalesce(b.vat, row.buyer_vat), b.nuts_code = coalesce(b.nuts_code, row.nuts)
-                        MERGE (a:Award {identifier: row.identifier})
-                        ON CREATE SET a.original_id = row.id, a.value = toFloat(row.value), a.year = toInteger(row.year),
-                            a.deg = row.deg, a.cpv_code = row.cpv, a.nuts_code = row.nuts,
-                            a.source = "TED", a.ingested_at = datetime(),
-                            a.`rdf:type` = 'http://data.europa.eu/a4g/ontology#ContractAward'
-                        MERGE (b)-[:AWARDS]->(a)
-                        WITH a, row WHERE row.winner IS NOT NULL
-                        MERGE (w:Winner {name: row.winner})
-                        MERGE (a)-[:WON_BY]->(w)
-            """, batch)
+            conn.write_batch(_AWARD_CYPHER_ENDORSE, batch)
 
     # Create LegalEntity hierarchy
     print("   Constructing LegalEntity hierarchy for decentralized units...")
@@ -577,22 +796,53 @@ def load_to_federated(dry_run=False):
     """, [{"dummy": 1}])
     print("    LegalEntity hierarchy constructed")
 
+    # --- Cross-source Buyer diagnostic ---
+    print("\n    Cross-source Buyer diagnostic...")
+    try:
+        result = conn.run("""
+            MATCH (b:Buyer)-[:AWARDS]->(a:Award)
+            WITH b, collect(DISTINCT a.source) AS sources
+            RETURN
+                count(b) AS total_linked,
+                sum(CASE WHEN size(sources) > 1 THEN 1 ELSE 0 END) AS cross_source
+        """)
+        total_buyers_result = conn.run("MATCH (b:Buyer) RETURN count(b) AS cnt")
+        total_buyers = total_buyers_result[0]["cnt"] if total_buyers_result else 0
+        total_linked = result[0]["total_linked"] if result else 0
+        cross_source = result[0]["cross_source"] if result else 0
+        pct = (cross_source / total_buyers * 100) if total_buyers > 0 else 0
+        print(f"      Total Buyers:                {total_buyers}")
+        print(f"      Buyers with awards:          {total_linked}")
+        print(f"      Cross-source matched Buyers: {cross_source}")
+        print(f"      Match ratio:                 {pct:.1f}%")
+    except Exception as e:
+        print(f"      Diagnostic query failed: {e}")
+
     conn.close()
     print("\n Load complete!")
+
+    # Log unresolved awards
+    if unresolved_awards:
+        print(f"\n    Unresolved awards (no Buyer match): {len(unresolved_awards)}")
+        for entry in unresolved_awards[:5]:
+            print(f"      {entry['source']} | {entry['id']} | raw_buyer: {entry.get('raw_buyer')}")
+        if len(unresolved_awards) > 5:
+            print(f"      ... and {len(unresolved_awards) - 5} more")
 
     # Save report
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     report = {"timestamp": ts, "buyers": len(registry.buyers),
               "winners": len(registry.winners), "merged": len(registry.merge_log),
               "pending": len(registry.pending_review),
+              "unresolved_awards": len(unresolved_awards),
               "merge_log": registry.merge_log[:50],
-              "pending_review": registry.pending_review[:50]}
+              "pending_review": registry.pending_review[:50],
+              "unresolved_sample": unresolved_awards[:100]}
     rpath = LOG_DIR / f"ingestion_report_{ts}.json"
     with open(rpath, "w", encoding="utf-8") as f:
         import json as built_in_json
         built_in_json.dump(report, f, ensure_ascii=False, indent=2, default=str)
     print(f" Report: {rpath}")
-
 
 # =============================================================================
 # CLI
