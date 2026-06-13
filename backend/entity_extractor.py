@@ -447,10 +447,17 @@ def extract_entity_composite(
         q_tokens_normalized.append((q_norm, q_loc, list(set(stems))))
 
     specific_hits = set()
+    index_keys = list(_entity_index.keys()) if _entity_index else []
     for q_norm, q_loc, stems in q_tokens_normalized:
         if q_norm not in common_tokens and q_loc not in common_tokens:
             for s in stems:
-                if s in _entity_index: specific_hits.update(_entity_index[s])
+                if s in _entity_index: 
+                    specific_hits.update(_entity_index[s])
+                # Αν η λέξη είναι αρκετά μεγάλη, ψάχνουμε και για κοντινά typos (μόνο specific tokens)
+                if len(s) >= 5 and index_keys:
+                    close_keys = difflib.get_close_matches(s, index_keys, n=3, cutoff=0.85)
+                    for ck in close_keys:
+                        specific_hits.update(_entity_index[ck])
     
     if specific_hits:
         # Αν βρήκαμε σπάνια tokens, ψάχνουμε ΜΟΝΟ σε αυτά (δραστική μείωση χρόνου)
