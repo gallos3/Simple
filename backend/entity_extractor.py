@@ -572,6 +572,64 @@ def extract_entity_composite(
         # Αυστηρότερο threshold (90%)
         similar_matches = [m for m in matches if m["score"] >= best["score"] * 0.90]
         if len(similar_matches) > 1:
+            # --- GROUP ENTITY DETECTION ---
+            # Build token sets from query tokens (stem-level matching)
+            all_token_sets = []
+            for i, (q_norm, q_loc, stems) in enumerate(q_tokens_normalized):
+                if len(q_norm) >= 3:
+                    token_set = set([q_norm, q_loc] + stems)
+                    all_token_sets.append((i, token_set))
+
+            # Precompute candidate stem sets for token-level matching
+            candidate_stem_map = {}
+            for m in similar_matches:
+                m_norm = normalize_greek(m["name"])
+                m_stems = set()
+                for mt in m_norm.split():
+                    m_stems.add(mt)
+                    m_stems.update(_stem_greek(mt))
+                candidate_stem_map[m["name"]] = m_stems
+
+            # Keep only entity-relevant tokens (appear in >= 1 candidate)
+            core_token_sets = []
+            core_indices = []
+            for idx, ts in all_token_sets:
+                if any(ts.intersection(cs) for cs in candidate_stem_map.values()):
+                    core_token_sets.append(ts)
+                    core_indices.append(idx)
+
+            # If >= 2 entity-relevant tokens, find group members
+            if len(core_token_sets) >= 2:
+                group_members = []
+                for m in similar_matches:
+                    if all(ts.intersection(candidate_stem_map[m["name"]])
+                           for ts in core_token_sets):
+                        group_members.append(m["name"])
+                group_members = list(dict.fromkeys(group_members))  # deduplicate
+
+                if len(group_members) >= 2:
+                    display_name = " ".join(
+                        q_tokens[i].upper()
+                        for i in core_indices if i < len(q_tokens)
+                    ) or best["name"]
+                    print(f"   [GROUP] Detected: '{display_name}' "
+                          f"({len(group_members)} members)")
+                    for gm in group_members[:5]:
+                        print(f"      - {gm}")
+                    if len(group_members) > 5:
+                        print(f"      ... and {len(group_members) - 5} more")
+                    return {
+                        "label": "Buyer",
+                        "type": "buyer_group",
+                        "property": "name",
+                        "value": display_name,
+                        "members": group_members[:20],
+                        "score": best["score"],
+                        "ambiguous": False,
+                        "alternatives": []
+                    }
+
+            # No group detected — normal disambiguation
             alternatives = [m["name"] for m in similar_matches[:5]]
             print(f"   [COMPOSITE] Multiple matches: {alternatives}")
     

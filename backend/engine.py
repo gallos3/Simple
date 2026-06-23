@@ -806,6 +806,8 @@ def disambiguate_authority_by_nuts(entity: dict, question: str) -> dict:
     """
     if not entity or entity.get("label") != "Buyer":
         return entity
+    if entity.get("type") == "buyer_group":
+        return entity
 
     alts = [entity.get("value")] + list(entity.get("alternatives") or [])
     tokens = [normalize_greek(t) for t in re.findall(r"[Α-Ωα-ωΆ-ώ]+", question or "")]
@@ -1101,11 +1103,37 @@ def _execute_matched_query(
         return "Για ποιο έτος θέλεις να τρέξω το ερώτημα;"
     
     # Replace placeholders για authority name
+    _group_names = None
     if entity and "$name" in cypher:
-        from database import replace_entity_in_query
-        cypher = replace_entity_in_query(cypher, entity["value"])
-        _last_entity = entity
-        print(f"   Replaced $name with: {entity['value']}")
+        if entity.get("type") == "buyer_group":
+            members = list(dict.fromkeys(entity["members"]))  # deduplicate
+            # Primary: toLower(var) = toLower($name) → var IN $names (canonical match)
+            new_cypher = re.sub(
+                r'toLower\(\s*(\w+)\s*\)\s*=\s*toLower\(\s*\$name\s*\)',
+                r'\1 IN $names',
+                cypher
+            )
+            if new_cypher != cypher:
+                cypher = new_cypher
+                _group_names = members  # canonical names, no lowercasing
+            else:
+                # Fallback: var.name = $name → var.name IN $names
+                new_cypher = re.sub(r'(\w+\.name)\s*=\s*\$name', r'\1 IN $names', cypher)
+                if new_cypher != cypher:
+                    cypher = new_cypher
+                    _group_names = members  # canonical names
+                else:
+                    # Last resort: use first member only
+                    from database import replace_entity_in_query
+                    cypher = replace_entity_in_query(cypher, members[0])
+            _last_entity = entity
+            n = len(members)
+            print(f"   [GROUP] $name → IN $names ({n} members)")
+        else:
+            from database import replace_entity_in_query
+            cypher = replace_entity_in_query(cypher, entity["value"])
+            _last_entity = entity
+            print(f"   Replaced $name with: {entity['value']}")
     
     # Replace $cpv placeholder
     if "$cpv" in cypher:
@@ -1114,11 +1142,14 @@ def _execute_matched_query(
         cypher = cypher.replace("$cpv", f'"{cpv_val}"')
         print(f"   Replaced $cpv with: {cpv_val}")
 
-    # Prepare Cypher parameters
+    # Prepare Cypher parameters — always rebuild from final cypher state
     query_params = {}
     if "$year" in cypher or query.get("needs_year"):
         query_params["year"] = str(year)
         print(f"   Added year parameter: {year}")
+    if entity and entity.get("type") == "buyer_group":
+        query_params["names"] = list(dict.fromkeys(entity["members"]))
+        print(f"   Added names parameter: {len(query_params['names'])} members")
 
     # Replace $top_n placeholder (number of top entities to return)
     if "$top_n" in cypher:
@@ -1197,6 +1228,16 @@ def _execute_matched_query(
     
     print(f"   Output type: {output_type}")
     
+    # Safety check: ensure all $params in cypher have matching query_params
+    _required = re.findall(r'\$(\w+)', cypher)
+    _missing = [p for p in _required if p not in query_params
+                and p not in ('name',)]  # $name is string-replaced, not parameterized
+    if _missing:
+        print(f"   ⚠️  MISSING PARAMS: {_missing} not in query_params {list(query_params.keys())}")
+        print(f"   ⚠️  Final cypher: {cypher[:300]}")
+
+    print(f"   QUERY PARAMS: {list(query_params.keys())}")
+
     # Execute query
     from database import execute_cypher, extract_graph_elements
     from debug_logger import update_trace
@@ -1243,7 +1284,7 @@ def _execute_matched_query(
             }
     
     if output_type == "chart":
-        raw_results = execute_cypher(cypher, format_output=False)
+        raw_results = execute_cypher(cypher, params=query_params, format_output=False)
         if isinstance(raw_results, list):
             print(f"    Chart result: {len(raw_results)} data points")
             return {
@@ -1253,7 +1294,7 @@ def _execute_matched_query(
             }
     
     # Default: text result
-    raw_results = execute_cypher(cypher, format_output=False)
+    raw_results = execute_cypher(cypher, params=query_params, format_output=False)
     _last_results = raw_results
 
     # Αν γύρισε string, είναι πιθανότατα μήνυμα λάθους
@@ -1292,12 +1333,24 @@ def _execute_matched_query(
         
         #  Χρήση άρθρου από την ερώτηση του χρήστη
         if entity and authority_name:
-            user_article = extract_article_from_question(question, authority_name)
-            
-            if user_article:
-                answer = f"{user_article} {authority_name} έχει {value} {noun_phrase}."
+            if entity.get("type") == "buyer_group":
+                n_members = len(entity.get("members", []))
+                sample = entity["members"][:3]
+                sample_str = ", ".join(sample)
+                if n_members > 3:
+                    sample_str += f" ... (+{n_members - 3})"
+                answer = (
+                    f"**Aggregated entity: {authority_name} "
+                    f"({n_members} sub-entities)**\n"
+                    f"_{sample_str}_\n\n"
+                    f"Συνολικά {value} {noun_phrase}."
+                )
             else:
-                answer = f"Η αναθέτουσα αρχή {authority_name} έχει {value} {noun_phrase}."
+                user_article = extract_article_from_question(question, authority_name)
+                if user_article:
+                    answer = f"{user_article} {authority_name} έχει {value} {noun_phrase}."
+                else:
+                    answer = f"Η αναθέτουσα αρχή {authority_name} έχει {value} {noun_phrase}."
         elif noun_phrase:
             answer = f"Βρέθηκαν {value} {noun_phrase}."
         else:
@@ -1327,7 +1380,20 @@ def _execute_matched_query(
         if ("αναδοχ" in ql or "εταιρ" in ql) and ("top" in ql or "κορυφ" in ql) and not m:
             max_rows = 5
 
-        return _format_table_results(raw_results, max_rows=max_rows)
+        table_text = _format_table_results(raw_results, max_rows=max_rows)
+        if entity and entity.get("type") == "buyer_group":
+            n_members = len(entity.get("members", []))
+            sample = entity["members"][:3]
+            sample_str = ", ".join(sample)
+            if n_members > 3:
+                sample_str += f" ... (+{n_members - 3})"
+            table_text = (
+                f"**Aggregated entity: {authority_name} "
+                f"({n_members} sub-entities)**\n"
+                f"_{sample_str}_\n\n"
+                + table_text
+            )
+        return table_text
 
 
     # ----------------------------------------------------
