@@ -14,7 +14,7 @@ services:
       - "7474:7474"   # Browser
       - "7687:7687"   # Bolt
     environment:
-      - NEO4J_AUTH=neo4j/ohi21365pote
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
       - NEO4J_dbms_memory_heap_max__size=2G
     volumes:
