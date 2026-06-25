@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from utils.debug_logger import start_trace, update_trace
 from typing import Any, Dict, List, Optional, Union
-
+from data_access.query_matcher import get_query_match
 from flask import Flask, Response, request, stream_with_context, jsonify
 from flask_cors import CORS
 
@@ -46,6 +46,11 @@ from data_access.database import get_all_predefined_queries, execute_cypher, ext
 from data_access.query_matcher import get_query_match, detect_output_type
 from rag.web_search import search_legal_web, search_general_web
 from utils.social_handler import handle_social_query
+
+def looks_like_authority_query(text: str) -> bool:
+    keywords = ["ΑΧΕΠΑ", "ΠΓΝ", "ΓΝ", "ΝΟΣΟΚΟΜΕΙ", "ΔΗΜΟΣ", "ΠΕΡΙΦΕΡΕΙΑ", "ΥΠΟΥΡΓΕΙΟ", "ΠΑΝΕΠΙΣΤΗΜΙ", "ΑΕΙ", "ΕΚΑΒ", "ΕΟΠΥΥ", "ΕΦΚΑ"]
+    text_upper = text.upper()
+    return any(k in text_upper for k in keywords)
 
 def create_sse_event(event_type: str, data: Any) -> str:
     """Formats a message as an SSE event for the frontend."""
@@ -99,19 +104,17 @@ def add_streaming_routes(app: Flask):
             
             # === 0.5) Pending Auth Flow ===
             if engine.PENDING_AUTH.get("active"):
-                import os
                 APP_PASSWORD = os.getenv("APP_PASSWORD", "EADHSY")
                 if question.strip() == APP_PASSWORD:
                     engine.IS_AUTHENTICATED_AUDITOR = True
                     engine.PENDING_AUTH["active"] = False
                     yield create_sse_event("start", {"intent": "general"})
-                    msg = "[OK] Επιτυχής ταυτοποίηση Ελεγκτή! Ξεκινά η δημιουργία της έκθεσης...\n\n"
-                    yield from stream_text_chunks(msg, chunk_size=6, delay=0.03)
+                    yield create_sse_event("token", "[OK] Επιτυχής ταυτοποίηση Ελεγκτή. Δημιουργώ την έκθεση...")
+                    yield create_sse_event("end", {})
                     
                     authority = engine.PENDING_AUTH.get("authority")
                     year = engine.PENDING_AUTH.get("year", "2024")
                     
-                    import os
                     from utils.config import API_HOST, API_PORT
                     API_BASE_URL = f"http://{API_HOST}:{API_PORT}"
                     try:
@@ -127,7 +130,6 @@ def add_streaming_routes(app: Flask):
                             "text": link_msg
                         }
                         yield create_sse_event("action", action_data)
-                        yield from stream_text_chunks(link_msg, chunk_size=6, delay=0.02)
                     except Exception as e:
                         err_msg = f"[!] Σφάλμα κατά τη δημιουργία της έκθεσης: {str(e)}"
                         yield create_sse_event("token", err_msg)
@@ -182,7 +184,6 @@ def add_streaming_routes(app: Flask):
                     is_batch = any(k in q_lower for k in ["συνολική", "συνολικη", "όλες", "ολες", "όλοι", "ολοι", "συγκεντρωτική", "συγκεντρωτικη"])
                     
                     if is_batch:
-                        import os
                         from utils.config import API_HOST, API_PORT
                         from analytics.report_generator import run_illegal_award_checks_and_export_docx
                         year_batch = extract_year_from_question(question, from_voice=from_voice) or "2024"
@@ -225,14 +226,67 @@ def add_streaming_routes(app: Flask):
                 case_id = get_last_case_id()
                 if case_id:
                     case = get_case(case_id) or {}
-                    text = f"Case: {case_id}\nAvailable results: {list((case.get('results') or {}).keys())}\nΖήτησες: {q_clean.upper()}"
+                    requested = q_clean.upper()
+                    results = case.get('results') or {}
+                    res_data = results.get(requested) or {}
+                    findings = res_data.get('findings') or []
+                    
+                    if not findings:
+                        text = "Δεν βρέθηκαν ευρήματα."
+                    else:
+                        lines = [f"**Αποτελέσματα για {requested}**", f"Συνολικό πλήθος: {len(findings)}\n"]
+                        for i, f_obj in enumerate(findings[:10], 1):
+                            r = f_obj.get("row", {})
+                            if requested == "S1":
+                                desc = r.get("description", r.get("τίτλος", r.get("Τίτλος", "-")))
+                                amt = r.get("Ποσό", r.get("amount", r.get("value", 0)))
+                                cpv = r.get("CPV", r.get("cpv", r.get("cpv_code", "-")))
+                                dt = r.get("date", r.get("submission_date", "-"))
+                                try:
+                                    amt_str = f"{float(amt):,.2f}€"
+                                except Exception:
+                                    amt_str = f"{amt}€"
+                                lines.append(f"{i}. {desc} | {amt_str} | CPV: {cpv} | {dt}")
+                            else:
+                                gk = f_obj.get("group_key", {})
+                                gk_str = ", ".join(f"{k}: {v}" for k, v in gk.items()) if gk else "-"
+                                amt = r.get("Σύνολο", r.get("total", 0))
+                                try:
+                                    amt_str = f"{float(amt):,.2f}€"
+                                except Exception:
+                                    amt_str = f"{amt}€"
+                                lines.append(f"{i}. {gk_str} | Σύνολο: {amt_str}")
+                        text = "\n".join(lines)
+                        
                     yield create_sse_event("start", {"intent": "playbook_detail"})
                     yield from stream_text_chunks(text, chunk_size=6, delay=0.01)
                     yield create_sse_event("end", {})
                     return
 
             # === 2.5) Normal Intent Detection ===
+            # Explicit simulation exit
+            q_clean_for_exit = question.lower()
+            exit_commands = ["exit", "stop", "stop simulation", "exit serious game", "stop serious game", "τέλος", "σταμάτα", "σταματησε", "τέλος προσομοίωσης"]
+            if any(cmd in q_clean_for_exit for cmd in exit_commands):
+                history.clear()
+                yield create_sse_event("start", {"intent": "general"})
+                yield from stream_text_chunks("Simulation ended. How can I assist you next?", chunk_size=6, delay=0.02)
+                yield create_sse_event("end", {})
+                return
+
             intent = detect_intent(question, history)
+
+            # Auto-exit simulation on intent change
+            is_in_simulation = any(
+                "SCENARIO" in msg.get("text", "")
+                for msg in history if msg.get("role") == "assistant"
+            )
+
+            if is_in_simulation:
+                isolated_intent = detect_intent(question, [])
+                if isolated_intent != "procurement_simulation":
+                    history.clear()
+                    intent = isolated_intent
 
             # === Early graph-type detection (before entity extraction) ===
             # Normalize accents so "περισσότερες" matches "περισσοτερ"
@@ -261,7 +315,28 @@ def add_streaming_routes(app: Flask):
             if intent in ("data_simple", "data_risk", "mixed_legal_data", "market_diagnostic", "report"):
                 if not is_top_company_graph:
                     entity_cache = load_entity_cache()
-                    entity = extract_entity_smart(question, entity_cache)
+                    
+                    # 1. Extract CPV to avoid false positive authority matching
+                    cpv_match = re.search(r'(?:για\s+)?cpv\s*[:=]?\s*(\d{3,8})', question, re.IGNORECASE)
+                    detected_cpv = cpv_match.group(1) if cpv_match else None
+                    
+                    q_for_entity = question
+                    if detected_cpv:
+                        # Remove CPV phrase before authority extraction
+                        q_for_entity = re.sub(r'(?:για\s+)?cpv\s*[:=]?\s*\d{3,8}', '', q_for_entity, flags=re.IGNORECASE).strip()
+                    
+                    entity = extract_entity_smart(q_for_entity, entity_cache)
+                    
+                    # 2. Reject if still matches CPV
+                    if entity:
+                        val_str = str(entity.get("value", "")).strip()
+                        if val_str.upper().startswith("CPV ") or val_str == detected_cpv or val_str.isdigit() or (entity.get("label") == "CPV" and looks_like_authority_query(q_for_entity)):
+                            entity = None
+                            
+                    # 3. If no entity found but CPV exists, set entity to CPV ONLY if no authority text
+                    if not entity and detected_cpv:
+                        if not looks_like_authority_query(q_for_entity):
+                            entity = {"label": "CPV", "value": detected_cpv}
                 
             year = extract_year_from_question(question, from_voice=from_voice)
 
@@ -306,7 +381,15 @@ def add_streaming_routes(app: Flask):
                 # Bypass year prompt for CPV, graph queries, and top-N aggregate queries (no year needed)
                 # FIX: top-N queries like "top 10 εταιρείες" are system-wide and don't need a year
                 is_top_n_query = not entity and any(k in normalize_greek(question) or k in question.lower() for k in ["top", "περισσοτερ", "κορυφ", "πρωτ"])
-                if not is_cpv_query and not is_graph_request and not is_top_n_query:
+                
+                requires_year = True
+                if intent == "data_simple":
+                    matched_query, _ = get_query_match(question, get_all_predefined_queries(), has_entity=bool(entity)) or (None, 0)
+                    if matched_query:
+                        cypher = str(matched_query.get("query", "")) + str(matched_query.get("cypher", ""))
+                        requires_year = any(token in cypher for token in ["$year", "{year}", "{έτος}"])
+
+                if not is_cpv_query and not is_graph_request and not is_top_n_query and requires_year:
                     yield create_sse_event("start", {"intent": "general"})
                     yield create_sse_event("token", "Για ποιο **έτος** θέλεις να τρέξω τον έλεγχο (π.χ. 2024);")
                     yield create_sse_event("end", {})
@@ -430,12 +513,25 @@ def add_streaming_routes(app: Flask):
                         # Determine authority and CPV domain
                         cpv_domain = None
                         authority_name = None
+                        
+                        cpv_match = re.search(r'(?:για\s+)?cpv\s*[:=]?\s*(\d{3,8})', question, re.IGNORECASE)
+                        if cpv_match:
+                            cpv_domain = cpv_match.group(1)
+                            print(f"[DEBUG] Extracted CPV directly from question: {cpv_domain}")
+                            
                         if entity:
                             if entity.get("label") == "CPV":
-                                cpv_domain = entity.get("value")
-                                print(f"[DEBUG] Passing CPV to diagnostics: {cpv_domain}")
+                                cpv_domain = cpv_domain or entity.get("value")
+                                authority_name = None
                             else:
                                 authority_name = entity.get("value")
+                        else:
+                            authority_name = None
+                            
+                        print(f"[DEBUG] Diagnostic extracted authority: {authority_name}")
+                        print(f"[DEBUG] Diagnostic extracted CPV: {cpv_domain}")
+                        print(f"[DEBUG] Diagnostic extracted year: {year}")
+                        print(f"[DEBUG] Calling calculate_full_diagnostics(authority_name={authority_name}, year={year}, cpv_domain={cpv_domain})")
                         # Fallback: ensure authority_name is set when not CPV
                         if not authority_name:
                             authority_name = None
@@ -499,7 +595,6 @@ def add_streaming_routes(app: Flask):
                         from data_access.database import get_predefined_query
                         matched_query = get_predefined_query(504)
                     else:
-                        from data_access.query_matcher import get_query_match
                         matched_query, _ = get_query_match(question, queries, has_entity=bool(entity)) or (None, 0)
                         
                     if matched_query:
@@ -514,6 +609,9 @@ def add_streaming_routes(app: Flask):
                         if user_article:
                             base_answer = re.sub(r"(Ο|Η|Το)\s+«[^»]+»\s+(έχει|είχε)", f"{user_article} «{short_name}» \\2", base_answer)
                             base_answer = re.sub(r"Η αναθέτουσα αρχή «[^»]+»", f"{user_article} «{short_name}»", base_answer)
+                            
+                    if not year and isinstance(base_answer, str):
+                        base_answer += "\n\n*(Σημείωση: Ανάλυση χωρίς συγκεκριμένο έτος — τα αποτελέσματα μπορεί να αφορούν υποσύνολο δεδομένων)*"
                     
                     answer = _maybe_attach_followup(question, entity, year, base_answer, intent="data_simple")
                     if isinstance(answer, dict):
@@ -525,11 +623,25 @@ def add_streaming_routes(app: Flask):
                 else:
                     # Try web search first for factual questions
                     web_context = ""
+                    def is_general_chat(q):
+                        q = q.lower()
+                        if len(q.split()) >= 5: return False
+                        if any(k in q for k in ["weather", "καιρός", "news", "ειδήσεις"]): return False
+                        return True
+
                     if web_search_enabled:
-                        print(f"[SSE][GENERAL] Web search for: {question}", flush=True)
-                        web_context = search_general_web(question)
+                        if is_general_chat(question):
+                            web_context = None
+                        else:
+                            print(f"[SSE][GENERAL] Web search for: {question}", flush=True)
+                            web_context = search_general_web(question)
                     
-                    if web_context:
+                    if web_context is None and not is_general_chat(question):
+                        # Web search explicitly failed (e.g. missing API key)
+                        msg = "Δεν μπορώ να απαντήσω από το web αυτή τη στιγμή."
+                        yield from stream_text_chunks(msg, chunk_size=6, delay=0.02)
+                        full_answer_str = msg
+                    elif web_context:
                         # Web found results — stream them directly (no LLM needed)
                         print(f"[SSE][GENERAL] Web results found, streaming directly", flush=True)
                         yield from stream_text_chunks(web_context, chunk_size=6, delay=0.02)

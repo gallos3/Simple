@@ -144,19 +144,16 @@ def stream_llm(prompt: str, max_tokens: int = 256, temperature: float = 0.0, sys
 # -----------------------------------------------------------
 SCHEMA = """
 Nodes:
-- Authority(name)
-- Company(name)
-- Contract(id,title,initial_value,final_value,signed_date)
-- ProcedureType(description)
-- CPV(code,description)
+- Buyer(name)
+- Winner(name)
+- Award(id,title,value,submission_date,cpv_code)
 - NUTS(code,description)
 
 Rels:
-- (Authority)-[:AWARDS]->(Contract)
-- (Company)-[:WON_BY]->(Contract)
-- (Contract)-[:OF_TYPE]->(ProcedureType)
-- (Contract)-[:HAS_CPV]->(CPV)
-- (Contract)-[:IN_REGION]->(NUTS)
+- (Buyer)-[:AWARDS]->(Award)-[:WON_BY]->(Winner)
+- (Award)-[:IN_REGION]->(NUTS)
+
+Note: CPV is stored directly on Award as: award.cpv_code
 """
 
 # -----------------------------------------------------------

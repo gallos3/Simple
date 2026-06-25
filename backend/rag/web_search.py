@@ -129,7 +129,7 @@ def search_general_web(question: str, max_results: int = 3) -> str:
     (e.g. weather, news, general knowledge).
     """
     if not TAVILY_API_KEY:
-        return ""
+        return None
 
     try:
         client = _get_client()
@@ -158,4 +158,4 @@ def search_general_web(question: str, max_results: int = 3) -> str:
 
     except Exception as e:
         print(f"[web_search] General search error: {e}")
-        return ""
+        return None

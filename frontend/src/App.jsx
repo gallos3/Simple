@@ -71,23 +71,7 @@ export default function App() {
     }
   }, []);
   
-  const hasGreeted = useRef(false);
-  // Initial Greeting
-  useEffect(() => {
-    if (!hasGreeted.current && messages.length === 0) {
-      hasGreeted.current = true;
-      const hour = new Date().getHours();
-      let greet = "Καλημέρα";
-      if (hour >= 12 && hour < 18) greet = "Καλησπέρα";
-      if (hour >= 18) greet = "Καλησπέρα";
-      
-      const welcome = userName 
-        ? `😊 Hello ${userName}! I am Simple. How can I help you with your audits today?`
-        : `😊 Hello! I am Simple, your public procurement assistant. How can I help you today?`;
-        
-      addMessage("bot", welcome);
-    }
-  }, []);
+
 
   // Global push-to-talk: κρατάω πατημένο το αριστερό κλικ οπουδήποτε
   useEffect(() => {

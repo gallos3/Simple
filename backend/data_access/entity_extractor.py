@@ -934,7 +934,26 @@ def extract_article_from_question(question: str, entity_name: str) -> Optional[s
     return None
 def extract_entity_from_question(question: str, entity_cache: dict):
     """
-    Backward-compatible wrapper for existing code.
-    Routes to extract_entity_smart.
+    Backward-compatible leaf function.
+    Provides CPV parsing if applicable, otherwise a safe empty entity.
     """
-    return extract_entity_smart(question, entity_cache)
+    # 1. Provide CPV detection so detect_intent() can still route correctly
+    cpv_code = extract_cpv_from_question(question)
+    if cpv_code:
+        return {
+            "label": "CPV",
+            "property": "code",
+            "value": cpv_code,
+            "score": 3.0,
+            "alternatives": [],
+        }
+
+    # 2. Safe fallback matching expected Dict structure
+    return {
+        "label": "Buyer",
+        "property": "name",
+        "value": "",
+        "score": 0.0,
+        "ambiguous": False,
+        "alternatives": []
+    }

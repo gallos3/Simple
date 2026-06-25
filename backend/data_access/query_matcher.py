@@ -77,6 +77,26 @@ def get_query_match(
     """
     if threshold is None:
         threshold = SIMILARITY_THRESHOLD
+
+    # --- Parameter-Aware Filtering ---
+    from data_access.entity_extractor import extract_year_from_question
+    year_found = bool(extract_year_from_question(question))
+    
+    valid_queries = []
+    for q in queries:
+        cypher = str(q.get("cypher", "")) + str(q.get("query", ""))
+        requires_entity = any(p in cypher for p in ["{αναθέτουσα}", "{Buyer}", "$name"])
+        requires_year = any(p in cypher for p in ["{έτος}", "{year}", "$year"])
+        
+        if requires_entity and not has_entity:
+            continue
+        if requires_year and not year_found:
+            continue
+        valid_queries.append(q)
+        
+    if valid_queries:
+        queries = valid_queries
+    # ---------------------------------
     
     # === PASS 1: Keyword-based matching (fast, reliable for structured questions) ===
     keyword_match = _keyword_based_match(question, queries, has_entity)

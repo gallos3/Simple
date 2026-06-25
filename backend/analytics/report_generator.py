@@ -53,8 +53,8 @@ def get_authority_statistics(authority: str, year: str) -> Dict[str, Any]:
 
     total = batch.get(201, [])
     if total:
-        stats["total_awards"] = total[0].get("total", 0)
-        stats["total_awards_value"] = round(float(total[0].get("total_value", 0)), 2)
+        stats["total_awards"] = total[0].get("συμβάσεις", 0)
+        stats["total_awards_value"] = round(float(total[0].get("συνολική_αξία", 0)), 2)
 
     # Q202/Q203 απαιτούν πεδίο τύπου διαδικασίας — δεν υπάρχει στη federated βάση
 
@@ -65,45 +65,47 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     Εκτελεί ελέγχους S1–S4 απευθείας στη Neo4j με το σωστό schema.
     """
  
-    # S1: Μεμονωμένες συμβάσεις > Όριο (δυναμικά από τον γράφο)
+    # S1: small awards clustering (value < threshold, count >= N)
     q_s1 = '''
-    MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold)
-    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
-    AND c.Value > t.value
-    RETURN c.title as Τίτλος,
-           c.Value as Ποσό,
-           cpv.code as CPV,
-           c.signed_date as Ημερομηνία,
-           t.value as Όριο
-    ORDER BY c.Value DESC
+    MATCH (b:Buyer {name: $name})-[:AWARDS]->(a:Award)
+    WHERE toInteger(substring(a.submission_date, 0, 4)) = $year
+      AND a.value < 30000
+    WITH a.cpv_code as CPV, sum(a.value) as Ποσό, count(a) as Πλήθος
+    WHERE Πλήθος >= 5
+    RETURN CPV as Τίτλος,
+           Ποσό,
+           CPV,
+           "" as Ημερομηνία,
+           30000 as Όριο
+    ORDER BY Ποσό DESC
     '''
  
     # S2: Άθροιση ανά CPV > Όριο
     q_s2 = '''
-    MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)-[:USE_THRESHOLD]->(t:Threshold)
-    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
-    WITH cpv.code as CPV, t.value as Όριο, sum(c.Value) as Σύνολο, count(c) as Πλήθος
-    WHERE Σύνολο > Όριο
-    RETURN CPV, Σύνολο, Πλήθος, Όριο
+    MATCH (b:Buyer {name: $name})-[:AWARDS]->(a:Award)
+    WHERE toInteger(substring(a.submission_date, 0, 4)) = $year
+    WITH a.cpv_code as CPV, sum(a.value) as Σύνολο, count(a) as Πλήθος
+    WHERE Σύνολο > 60000
+    RETURN CPV, Σύνολο, Πλήθος, 60000 as Όριο
     ORDER BY Σύνολο DESC
     '''
  
-    # S3: Άθροιση ανά CPV-5 > 30.000€ (Γενικό όριο για κλάσεις)
+    # S3: Άθροιση ανά CPV-5 > Όριο
     q_s3 = '''
-    MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:HAS_CPV]->(cpv:CPV)
-    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
-    WITH left(cpv.code, 5) as CPV5, sum(c.Value) as Σύνολο, count(c) as Πλήθος
-    WHERE Σύνολο > 30000
+    MATCH (b:Buyer {name: $name})-[:AWARDS]->(a:Award)
+    WHERE toInteger(substring(a.submission_date, 0, 4)) = $year
+    WITH substring(a.cpv_code, 0, 5) as CPV5, sum(a.value) as Σύνολο, count(a) as Πλήθος
+    WHERE Σύνολο > 60000
     RETURN CPV5, Σύνολο, Πλήθος
     ORDER BY Σύνολο DESC
     '''
  
-    # S4: Άθροιση ανά ανάδοχο > 30.000€
+    # S4: Άθροιση ανά ανάδοχο > Όριο
     q_s4 = '''
-    MATCH (a:Buyer {name: $name})-[:AWARDS]->(c:Award)-[:WON_BY]->(w:Winner)
-    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
-    WITH w.name as Ανάδοχος, sum(c.Value) as Σύνολο, count(c) as Πλήθος
-    WHERE Σύνολο > 30000
+    MATCH (b:Buyer {name: $name})-[:AWARDS]->(a:Award)-[:WON_BY]->(w:Winner)
+    WHERE toInteger(substring(a.submission_date, 0, 4)) = $year
+    WITH w.name as Ανάδοχος, sum(a.value) as Σύνολο, count(a) as Πλήθος
+    WHERE Σύνολο > 60000 AND Πλήθος >= 5
     RETURN Ανάδοχος, Σύνολο, Πλήθος
     ORDER BY Σύνολο DESC
     '''
@@ -124,9 +126,9 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
     total_amount = sum(float(r.get("Ποσό", 0) or 0) for r in s1)
  
     over_limit_comment = (
-        "Δεν εντοπίστηκαν μεμονωμένες απευθείας αναθέσεις με αξία πάνω από τα όρια."
+        "Δεν εντοπίστηκαν ενδείξεις κατακερματισμού αναθέσεων."
         if total_cases == 0
-        else f"Εντοπίστηκαν {total_cases} απευθείας αναθέσεις με αξία πάνω από 30.000€, "
+        else f"Εντοπίστηκαν {total_cases} περιπτώσεις με ενδείξεις κατακερματισμού αναθέσεων, "
              f"συνολικής αξίας {total_amount:,.2f}€."
     )
  
@@ -152,34 +154,26 @@ def get_over_limit_cases(authority: str, year: str) -> Dict[str, Any]:
             else f"Εντοπίστηκαν {len(s4)} ανάδοχοι με αθροιστική υπέρβαση ορίων."
         ),
     }
-def get_flagged_awards_table(authority: str, year: str) -> str:
+def get_flagged_awards_table(authority: str, year: str) -> list:
     query = '''
     MATCH (a:Buyer)-[:AWARDS]-(c:Award)
     WHERE a.name = $name 
-    AND toInteger(substring(c.signed_date, 0, 4)) = $year
-    AND c.procedure IN ["6", "16"]
-    AND toFloat(c.Value) > 30000
+    AND toInteger(substring(c.submission_date, 0, 4)) = $year
+    AND toFloat(c.value) > 30000
     RETURN c.title as description,
-           c.Value as amount,
-           c.cpv as cpv,
-           c.signed_date as date
-    ORDER BY toFloat(c.Value) DESC
+           c.value as amount,
+           c.cpv_code as cpv,
+           c.submission_date as date,
+           c.original_id as adam
+    ORDER BY toFloat(c.value) DESC
     LIMIT 50
     '''
     result = execute_cypher(query, {"name": authority, "year": int(year)}, format_output=False)
  
     if not result or not isinstance(result, list):
-        return "Δεν εντοπίστηκαν συμβάσεις με υπέρβαση ορίων."
+        return []
  
-    lines = ["Πίνακας: Συμβάσεις απευθείας ανάθεσης με υπέρβαση ορίου\n"]
-    for i, r in enumerate(result, 1):
-        lines.append(
-            f"{i}. {str(r.get('description',''))[:60]} | "
-            f"{float(r.get('amount',0)):,.2f}€ | "
-            f"CPV: {r.get('cpv','')} | "
-            f"{r.get('date','')}"
-        )
-    return "\n".join(lines)
+    return result
 # =============================================================================
 # MAIN REPORT GENERATION (using docxtpl)
 # =============================================================================
@@ -229,6 +223,14 @@ def generate_report_for_authority(
     over_limit = get_over_limit_cases(authority, year)
     flagged_table = get_flagged_awards_table(authority, year)
     
+    # Re-calculate S1 summary based on flagged_table to ensure consistency
+    total_cases = len(flagged_table)
+    total_amount = sum(float(r.get("amount", 0)) for r in flagged_table)
+    over_limit["over_limit_summary"] = {
+        "total_cases": total_cases,
+        "total_amount": total_amount
+    }
+    
     # Generate summary comment
     summary_findings = generate_summary_comment(authority, stats, over_limit)
     
@@ -260,28 +262,106 @@ def generate_report_for_authority(
         # Over limit data
         "over_limit_summary": over_limit["over_limit_summary"],
         "over_limit_comment": over_limit["over_limit_comment"],
-        "cpv_over_limit": over_limit["cpv_over_limit"],
+        "cpv_over_limit": [],
         "cpv_over_limit_comment": over_limit["cpv_over_limit_comment"],
-        "cpv_class_over_limit": over_limit["cpv_class_over_limit"],
+        "cpv_class_over_limit": [],
         "cpv_class_over_limit_comment": over_limit["cpv_class_over_limit_comment"],
-        "contractor_over_limit": over_limit["contractor_over_limit"],
+        "contractor_over_limit": [],
         "contractor_over_limit_comment": over_limit["contractor_over_limit_comment"],
         
         # Summary and appendix
         "summary_findings_comment": summary_findings,
-        "total_flagged_awards": flagged_table
+        "total_flagged_awards": ""
     }
     
+    import io
+    from docx import Document
+
     # Render template
     doc.render(context)
     
+    rendered_io = io.BytesIO()
+    doc.save(rendered_io)
+    rendered_io.seek(0)
+    
+    doc_inner = Document(rendered_io)
+    if flagged_table:
+        doc_inner.add_page_break()
+        doc_inner.add_heading("Appendix A: S1 findings", level=1)
+        table = doc_inner.add_table(rows=1, cols=6)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text, hdr[4].text, hdr[5].text = "Α/Α", "ΑΔΑΜ", "Περιγραφή", "Ποσό", "CPV", "Ημερομηνία"
+        for idx, r in enumerate(flagged_table, 1):
+            cells = table.add_row().cells
+            cells[0].text = str(idx)
+            cells[1].text = str(r.get("adam") or "-")
+            cells[2].text = str(r.get("description", ""))[:60]
+            cells[3].text = f"{float(r.get('amount', 0)):,.2f}€"
+            cells[4].text = str(r.get("cpv", ""))
+            cells[5].text = str(r.get("date", ""))
+
+    s2 = over_limit.get("cpv_over_limit", [])
+    if s2:
+        doc_inner.add_page_break()
+        doc_inner.add_heading("Appendix B: S2 findings", level=1)
+        table = doc_inner.add_table(rows=1, cols=4)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Α/Α", "CPV", "Σύνολο", "Πλήθος"
+        for idx, r in enumerate(s2, 1):
+            cells = table.add_row().cells
+            cpv = r.get("CPV") or r.get("cpv") or r.get("cpv_code") or "-"
+            total = r.get("Σύνολο") or r.get("total") or r.get("amount") or 0
+            count = r.get("Πλήθος") or r.get("count") or "-"
+            cells[0].text = str(idx)
+            cells[1].text = str(cpv)
+            cells[2].text = f"{float(total):,.2f}€"
+            cells[3].text = str(count)
+
+    s3 = over_limit.get("cpv_class_over_limit", [])
+    if s3:
+        doc_inner.add_page_break()
+        doc_inner.add_heading("Appendix C: S3 findings", level=1)
+        table = doc_inner.add_table(rows=1, cols=4)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Α/Α", "CPV-5", "Σύνολο", "Πλήθος"
+        for idx, r in enumerate(s3, 1):
+            cells = table.add_row().cells
+            cpv5 = r.get("CPV5") or r.get("cpv5") or r.get("cpv_class") or "-"
+            total = r.get("Σύνολο") or r.get("total") or 0
+            count = r.get("Πλήθος") or r.get("count") or "-"
+            cells[0].text = str(idx)
+            cells[1].text = str(cpv5)
+            cells[2].text = f"{float(total):,.2f}€"
+            cells[3].text = str(count)
+
+    s4 = over_limit.get("contractor_over_limit", [])
+    if s4:
+        doc_inner.add_page_break()
+        doc_inner.add_heading("Appendix D: S4 findings", level=1)
+        table = doc_inner.add_table(rows=1, cols=4)
+        table.style = "Table Grid"
+        hdr = table.rows[0].cells
+        hdr[0].text, hdr[1].text, hdr[2].text, hdr[3].text = "Α/Α", "Ανάδοχος", "Σύνολο", "Πλήθος"
+        for idx, r in enumerate(s4, 1):
+            cells = table.add_row().cells
+            contractor = r.get("Ανάδοχος") or r.get("ανάδοχος") or r.get("contractor") or r.get("name") or "-"
+            total = r.get("Σύνολο") or r.get("total") or 0
+            count = r.get("Πλήθος") or r.get("count") or "-"
+            cells[0].text = str(idx)
+            cells[1].text = str(contractor)
+            cells[2].text = f"{float(total):,.2f}€"
+            cells[3].text = str(count)
+            
     # Save output
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_authority = "".join(c if c.isalnum() else "_" for c in authority)[:30]
     filename = f"audit_{safe_authority}_{year}_{timestamp}.docx"
     
     output_path = REPORTS_FOLDER / filename
-    doc.save(str(output_path))
+    doc_inner.save(str(output_path))
     
     save_export_path(str(output_path))
     
@@ -339,9 +419,8 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
     # Βρες όλες τις αρχές με απευθείας αναθέσεις > 30.000€
     query = '''
     MATCH (a:Buyer)-[:AWARDS]-(c:Award)
-    WHERE toInteger(substring(c.signed_date, 0, 4)) = $year
-    AND c.procedure IN ["6", "16"]
-    AND toFloat(c.Value) > 30000
+    WHERE toInteger(substring(c.submission_date, 0, 4)) = $year
+    AND toFloat(c.value) > 30000
     RETURN DISTINCT a.name as authority
     ORDER BY a.name
     '''
@@ -377,13 +456,13 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
 
         doc.add_heading(authority_name, level=2)
 
-        # --- S1: Μεμονωμένες συμβάσεις ---
-        doc.add_heading("S1 – Μεμονωμένες συμβάσεις > 30.000€", level=3)
+        # --- S1: Ενδείξεις κατακερματισμού αναθέσεων ---
+        doc.add_heading("S1 – Ενδείξεις κατακερματισμού αναθέσεων", level=3)
         doc.add_paragraph(f"Πλήθος: {cases}  |  Συνολικό ποσό: {amount:,.2f}€")
 
-        # --- S2: Αθροιστική υπέρβαση ανά CPV ---
+        # --- S2: Συγκέντρωση αναθέσεων ανά CPV ---
         s2 = over_limit["cpv_over_limit"]
-        doc.add_heading("S2 – Αθροιστική υπέρβαση ανά CPV", level=3)
+        doc.add_heading("S2 – Συγκέντρωση αναθέσεων ανά CPV", level=3)
         if s2:
             table = doc.add_table(rows=1, cols=3)
             table.style = "Table Grid"
@@ -397,9 +476,9 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
         else:
             doc.add_paragraph("Δεν εντοπίστηκαν αθροιστικές υπερβάσεις ανά CPV.")
 
-        # --- S3: Αθροιστική υπέρβαση ανά CPV-5 ---
+        # --- S3: Συγκέντρωση αναθέσεων ανά κλάση CPV-5 ---
         s3 = over_limit["cpv_class_over_limit"]
-        doc.add_heading("S3 – Αθροιστική υπέρβαση ανά κλάση CPV-5", level=3)
+        doc.add_heading("S3 – Συγκέντρωση αναθέσεων ανά κλάση CPV-5", level=3)
         if s3:
             table = doc.add_table(rows=1, cols=3)
             table.style = "Table Grid"
@@ -413,9 +492,9 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
         else:
             doc.add_paragraph("Δεν εντοπίστηκαν αθροιστικές υπερβάσεις ανά κλάση CPV-5.")
 
-        # --- S4: Αθροιστική υπέρβαση ανά ανάδοχο ---
+        # --- S4: Συγκέντρωση αναθέσεων σε ίδιους αναδόχους ---
         s4 = over_limit["contractor_over_limit"]
-        doc.add_heading("S4 – Αθροιστική υπέρβαση ανά ανάδοχο", level=3)
+        doc.add_heading("S4 – Συγκέντρωση αναθέσεων σε ίδιους αναδόχους", level=3)
         if s4:
             table = doc.add_table(rows=1, cols=3)
             table.style = "Table Grid"
@@ -434,6 +513,9 @@ def run_illegal_award_checks_and_export_docx(year: str = "2024") -> str:
         total_violations += cases
         total_amount += amount
  
+    doc.add_paragraph()
+    doc.add_paragraph("⚠️ Τα αποτελέσματα αποτελούν στατιστικές ενδείξεις και όχι οριστική αξιολόγηση νομιμότητας. Απαιτείται περαιτέρω ελεγκτική διερεύνηση.")
+
     filename = f"summary_report_{year}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
     filepath = EXPORT_FOLDER / filename
     doc.save(str(filepath))
@@ -466,4 +548,5 @@ Top 5 Ανάδοχοι με υπερβάσεις:
     for contractor in over_limit["contractor_over_limit"][:5]:
         report += f"  - {contractor['name']}: {contractor['total']:,.2f}€\n"
     
+    report += "\n⚠️ Τα αποτελέσματα αποτελούν στατιστικές ενδείξεις και όχι οριστική αξιολόγηση νομιμότητας. Απαιτείται περαιτέρω ελεγκτική διερεύνηση.\n"
     return report.replace(",", ".")

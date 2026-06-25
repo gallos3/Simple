@@ -64,6 +64,12 @@ def _pick_followup_candidate(
 
 def detect_intent(question: str, entity=None, history: list = None) -> str:
     """Ανιχνεύει το intent της ερώτησης με χρήση normalization."""
+    
+    # 7. Social (Short-circuited before entity extraction to prevent expensive fallback loops on greetings)
+    from utils.social_handler import handle_social_query
+    if handle_social_query(question):
+        return "social"
+
     from data_access.entity_extractor import normalize_greek, load_entity_cache, extract_entity_from_question
     
     if isinstance(entity, list):
@@ -87,7 +93,7 @@ def detect_intent(question: str, entity=None, history: list = None) -> str:
         return "report"
 
     # 2. Simulation / Serious Game (Γρήγορο check πριν το βαρύ entity extraction)
-    sim_keywords_en = ["scenario", "simulation", "case study", "training", "exercise", "test me", "start", "new"]
+    sim_keywords_en = ["scenario", "simulation", "case study", "training", "exercise", "test me", "start", "new", "serious game"]
     sim_keywords_gr = ["περιστατικο", "σεναριο", "προσομοιωση", "εξετασε με", "ξεκινα", "παιχνιδι", "εκπαιδευση", "μαθημα", "ασκηση"]
     if any(k in q_raw for k in sim_keywords_en) or any(k in q for k in sim_keywords_gr):
         return "procurement_simulation"
@@ -173,10 +179,6 @@ def detect_intent(question: str, entity=None, history: list = None) -> str:
     if any(k in q for k in ["ποσες", "ποσοι", "ποσο", "ποσα", "οσε", "οσα", "συνολο", "πληθος", "γραφημα", "μεσος ορος"]):
         return "data_simple"
 
-    # 7. Social
-    from utils.social_handler import handle_social_query
-    if handle_social_query(question):
-        return "social"
     print(f"[DEBUG] FINAL ENTITY: {entity}")
     return "general"
 
@@ -540,15 +542,19 @@ def detect_playbook_intent(question: str) -> Optional[str]:
         "παρανομε",
         "απευθειας αναθε",
         "καταμηση",
-        "υπέρβαση ορίου",
-        "μη νομιμες αναθεσεις",
-        "παρανομες αναθεσεις",
-        "παρανομες απευθειας",
-        "ελεγχος αναθεσεων",
-        "ελεγξε αναθεσεις",
-        "ελεγξε για μη νομιμες",
+        "κατατμησ",
+        "υπέρβαση",
+        "υπερβασ",
+        "ελεγχος",
+        "ελεγξε",
+        "risk",
+        "irregularity",
         "illegal direct awards",
     ]
+    
+    irregularity_keywords = ["ενδειξ", "κατατμησ", "καταμησ", "υπερβασ", "ελεγχ", "risk", "irregularity", "μη νομιμε", "παρανομε", "illegal"]
+    if not any(k in q for k in irregularity_keywords):
+        return None
     # FIX: Αν περιέχει νομικές λέξεις (Curia, νομολογία) ή διαγνωστικές λέξεις, μην το πας σε playbook
     # για να μπορέσει να πάει στο legal RAG / Web search ή στο Diagnostic Engine.
     legal_indicators = [

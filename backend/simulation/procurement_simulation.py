@@ -37,6 +37,7 @@ SIMULATION_SYSTEM_PROMPT_CONTINUE = (
     "6. If the student chose incorrectly, explain WHY with a legal citation and present a consequence.\n"
     "7. Each turn must present a DIFFERENT challenge — do NOT repeat the same issue.\n"
     "8. STYLE CONSISTENCY: Maintain the narrative tone and complexity level found in the initial scenario or provided examples.\n\n"
+    "Always refer to Directive 2014/24/EU (not obsolete directives) and Greek Law 4412/2016 when relevant.\n\n"
     "OUTPUT FORMAT (nothing else):\n"
     "[CONSEQUENCE]: Was the choice correct or wrong? What happens next? Cite the law.\n"
     "[NEW CHALLENGE]: A new, different obstacle in this procurement.\n"
@@ -63,7 +64,7 @@ SIMULATION_SYSTEM_PROMPT_CONCLUSION = (
 def _count_student_turns(history: List[Dict]) -> int:
     """Count how many times the student has answered (excluding 'start' commands)."""
     count = 0
-    start_words = {"start", "new", "scenario", "simulation", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι"}
+    start_words = {"start", "new", "scenario", "simulation", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "προσομοίωση", "προσομοιωση", "serious game"}
     for msg in history:
         if msg.get("role") == "user":
             text = msg.get("text", "").strip().lower()
@@ -74,12 +75,12 @@ def _count_student_turns(history: List[Dict]) -> int:
 
 
 def build_simulation_prompt(question: str, history: List[Dict], rag_ctx: str, is_conclusion: bool = False) -> str:
-    is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new"])
+    is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"])
     
     if is_start:
         # Extract specific focus if possible (anything after the start keywords)
         focus = question
-        for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new"]:
+        for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"]:
             focus = focus.lower().replace(w, "").strip()
             
         prompt = (
@@ -114,7 +115,7 @@ def build_simulation_prompt(question: str, history: List[Dict], rag_ctx: str, is
 
 
 def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
-    is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new"])
+    is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"])
     
     # Count student turns to decide if we should force a conclusion
     student_turns = _count_student_turns(history)

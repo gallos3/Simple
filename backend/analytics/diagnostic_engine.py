@@ -699,6 +699,10 @@ def calculate_full_diagnostics(authority_name: str = None, year: str = "2024", c
     recurrence = calculate_recurrence_signals(year=year, cpv_domain=cpv_to_use)
 
     return {
+        "requested_authority": authority_name,
+        "requested_year": year,
+        "requested_cpv": cpv_domain,
+        "is_cpv_filtered": bool(cpv_domain and cpv_domain != "ALL"),
         "base": base,
         "network_entropy": entropy,
         "conditional_entropy": conditional,
@@ -706,15 +710,94 @@ def calculate_full_diagnostics(authority_name: str = None, year: str = "2024", c
         "vcd": vcd,
         "recurrence": recurrence,
     }
+import math
+from typing import Dict, Any
+
+def interpret_hhi(hhi: float) -> dict:
+    hhi = hhi or 0.0
+    if hhi > 0.25:
+        interp, rule, act = "Υψηλή (High)", "hhi > 0.25", "Εξετάστε ενίσχυση ανταγωνιστικών διαδικασιών"
+    elif hhi > 0.15:
+        interp, rule, act = "Μέτρια (Medium)", "0.15 < hhi <= 0.25", "Παρακολούθηση συγκέντρωσης"
+    else:
+        interp, rule, act = "Χαμηλή (Low)", "hhi <= 0.15", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": hhi, "trans": None, "interp": interp, "rule": rule, "action": act}
+
+def interpret_pa(pa: float) -> dict:
+    pa = pa or 0.0
+    band = math.log10(pa + 1)
+    if band > 7:
+        interp, rule, act = "Υψηλή (High)", "band > 7", "Ελέγξτε επαναλαμβανόμενη ανάθεση σε συγκεκριμένους αναδόχους"
+    elif band > 5:
+        interp, rule, act = "Μέτρια (Medium)", "band > 5", "Παρακολούθηση προτίμησης αναδόχων"
+    else:
+        interp, rule, act = "Χαμηλή (Low)", "band <= 5", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": pa, "trans": f"log10(PA+1) = {band:.2f}", "interp": interp, "rule": rule, "action": act}
+
+def interpret_hf(hf: float) -> dict:
+    hf = hf or 0.0
+    if hf > 2.0:
+        interp, rule, act = "Υψηλή (High)", "hf > 2.0", "Διερευνήστε ρουτινοποιημένες αναθέσεις"
+    elif hf > 1.2:
+        interp, rule, act = "Μέτρια (Medium)", "hf > 1.2", "Παρακολούθηση ιστορικής συχνότητας"
+    else:
+        interp, rule, act = "Χαμηλή (Low)", "hf <= 1.2", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": hf, "trans": None, "interp": interp, "rule": rule, "action": act}
+
+def interpret_aa(aa: float) -> dict:
+    aa = aa or 0.0
+    return {"raw": aa, "trans": None, "interp": "Δεν υπάρχει διαθέσιμος κανόνας", "rule": "-", "action": "-"}
+
+def interpret_vcd(vcd: float) -> dict:
+    vcd = vcd or 0.0
+    if vcd > 0.4:
+        interp, rule, act = "Υψηλή απόκλιση (High divergence)", "vcd > 0.4", "Ελέγξτε ασυμμετρία αξίας/όγκου"
+    elif vcd > 0.2:
+        interp, rule, act = "Μέτρια απόκλιση (Medium divergence)", "0.2 < vcd <= 0.4", "Παρακολούθηση απόκλισης"
+    else:
+        interp, rule, act = "Χαμηλή απόκλιση (Low divergence)", "vcd <= 0.2", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": vcd, "trans": None, "interp": interp, "rule": rule, "action": act}
+
+def interpret_entropy(ent: float) -> dict:
+    ent = ent or 0.0
+    if ent < 0.4:
+        interp, rule, act = "Χαμηλή ποικιλία (Low diversity) / Υψηλή συγκέντρωση", "entropy_norm < 0.4", "Διερευνήστε περιορισμένη ποικιλία συμμετεχόντων"
+    elif ent < 0.7:
+        interp, rule, act = "Μέτρια ποικιλία (Medium diversity)", "0.4 <= entropy_norm < 0.7", "Παρακολούθηση ποικιλίας συμμετεχόντων"
+    else:
+        interp, rule, act = "Υψηλή ποικιλία (High diversity)", "entropy_norm >= 0.7", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": ent, "trans": None, "interp": interp, "rule": rule, "action": act}
+
+def interpret_ici(ici: float) -> dict:
+    ici = ici or 0.0
+    if ici > 0.1:
+        interp, rule, act = "Υψηλό κλείσιμο (High closure)", "ici > 0.1", "Απαιτείται έλεγχος θεσμικού κλεισίματος"
+    elif ici > 0.02:
+        interp, rule, act = "Μέτριο κλείσιμο (Medium closure)", "0.02 < ici <= 0.1", "Παρακολούθηση θεσμικού περιβάλλοντος"
+    else:
+        interp, rule, act = "Χαμηλό κλείσιμο (Low closure)", "ici <= 0.02", "Καμία απαιτούμενη ενέργεια"
+    return {"raw": ici, "trans": None, "interp": interp, "rule": rule, "action": act}
+
+def format_interpretation(name: str, res: dict) -> str:
+    lines = []
+    lines.append(f"**Metric:** {name}  ")
+    val_str = f"{res['raw']:,.4f}" if isinstance(res['raw'], float) else f"{res['raw']}"
+    lines.append(f"**Value:** {val_str}  ")
+    if res.get('trans'):
+        lines.append(f"**Scale:** {res['trans']}  ")
+    lines.append(f"**Interpretation:** {res['interp']}  ")
+    lines.append(f"**Rule:** {res['rule']}  ")
+    lines.append(f"**Action:** {res['action']}")
+    return "\n".join(lines) + "\n"
+
 # =============================================================================
 # 6. DIAGNOSTIC REASONING (Report Generator)
 # =============================================================================
 
 def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
     """
-    Generates a structured, analytical diagnostic report from the metrics.
+    Generates a strict, rule-based, deterministic diagnostic report from metrics.
     """
-    # Detect input format
     if "base" in diag_data:
         base = diag_data["base"]
         entropy = diag_data.get("network_entropy", {})
@@ -730,8 +813,6 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
         vcd_data = {}
         recurrence_data = {}
 
-    # For CPV-only queries, base has no_data but entropy/VCD/recurrence may still be populated.
-    # Only hard-exit if ALL metrics are empty.
     if base.get("status") == "no_data":
         has_data = (
             entropy.get("status") == "ok"
@@ -740,210 +821,127 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
         )
         if not has_data:
             return "Δεν υπάρχουν επαρκή δεδομένα για διάγνωση."
-        # CPV-only mode: use empty authority placeholders
         metrics = {"hhi": 0.0, "top_supplier_share": 0.0, "vendor_diversity": 0, "total_spend": 0.0}
-        authority = entropy.get("cpv_domain") or vcd_data.get("cpv_domain") or "CPV Domain"
-        year = entropy.get("year") or vcd_data.get("year") or ""
     else:
         metrics = base["metrics"]
-        authority = base.get("authority", "Φορέας")
-        year = base.get("year", "")
+
+    authority = (
+        diag_data.get("requested_authority")
+        or base.get("authority")
+        or diag_data.get("authority")
+        or "Μη προσδιορισμένη αναθέτουσα αρχή"
+    )
+    
+    year = (
+        diag_data.get("requested_year")
+        or base.get("year")
+        or entropy.get("year")
+        or vcd_data.get("year")
+        or ""
+    )
+
+    cpv_code = (
+        diag_data.get("requested_cpv")
+        or base.get("cpv_domain")
+        or entropy.get("cpv_domain")
+        or vcd_data.get("cpv_domain")
+    )
+    
     year_str = f" (Έτος {year})" if year and str(year).isdigit() else ""
 
     hhi = metrics.get("hhi", 0.0)
-    top_share = metrics.get("top_supplier_share", 0.0)
     diversity = metrics.get("vendor_diversity", 0)
-    total_spend = metrics.get("total_spend", 0.0)
+    total_contracts = metrics.get("contract_count")
 
-    # ----------------------------------------------------
+    is_filtered = diag_data.get("is_cpv_filtered")
+    if is_filtered is None:
+        is_filtered = True if (cpv_code and cpv_code != "ALL") else False
+
+    report = ""
+    
+    # 0. DATA SCOPE
+    report += f"### 📌 DATA SCOPE\n\n"
+    
+    if authority != "Μη προσδιορισμένη αναθέτουσα αρχή" and cpv_code:
+        dataset_type = "Filtered subset (authority + CPV-level analysis)"
+    elif authority != "Μη προσδιορισμένη αναθέτουσα αρχή" and not cpv_code:
+        dataset_type = "Full procurement of authority"
+    else:
+        dataset_type = "CPV-domain analysis (no authority filter)"
+
+    report += f"- Authority: {authority}\n"
+    report += f"- Year: {year if year else 'ALL'}\n"
+    report += f"- CPV filter: {cpv_code if cpv_code else 'ALL'}\n"
+    report += f"- Dataset type: {dataset_type}\n\n"
+    
+    if cpv_code and cpv_code != "ALL":
+        report += "⚠️ Η ανάλυση βασίζεται σε υποσύνολο συμβάσεων και δεν αντιπροσωπεύει το σύνολο των αναθέσεων της αναθέτουσας αρχής.\n\n"
+
     # 1. MARKET STRUCTURE
-    # ----------------------------------------------------
-    report = f"### 📊 1. MARKET STRUCTURE (Δομή Αγοράς)\n"
-    report += f"- **Αναθέτουσα Αρχή**: **{authority}**{year_str}\n"
-    hhi_str = f"{hhi:.4f}".replace(".", ",")
-    share_str = f"{top_share*100:.1f}".replace(".", ",")
-    report += f"- **HHI (Συγκέντρωση Αγοράς)**: `{hhi_str}` | **Κορυφαίο Μερίδιο Αναδόχου**: `{share_str}%` | **Μοναδικοί Ανάδοχοι**: {diversity}\n"
+    report += f"### 🏢 MARKET STRUCTURE (Authority Level)\n"
+    report += f"Scope: Επίπεδο Αναθέτουσας Αρχής (ανά έτος)\n\n"
+    report += f"Μοναδικοί ανάδοχοι: {diversity} (στο συγκεκριμένο σύνολο δεδομένων)\n"
+    if total_contracts is not None:
+        report += f"Σύνολο συμβάσεων: {total_contracts}\n"
+    report += "\n"
     
-    # Entropy/HHI interpretation:
-    # High HHI + low entropy -> strong concentration
-    # Low HHI + high VCD -> hidden (скрытая) concentration
-    vcd_t = vcd_data.get("vcd_total") or 0.0
-    hy_norm = entropy.get("H_Y_normalized") if entropy.get("H_Y_normalized") is not None else 1.0
-    
-    if hhi > 0.15:
-        if hy_norm < 0.7:
-            report += "> ⚠️ **Market Concentration**: Strong concentration detected. High market concentration (HHI) combined with low network entropy H(Y) indicates oligopolistic hub dominance.\n"
-        else:
-            report += "> ⚠️ **Market Concentration**: High market concentration detected. Few suppliers capture a significant market share.\n"
-    else:
-        if vcd_t > 0.4:
-            report += "> 🔍 **Hidden Concentration**: Low HHI accompanied by high VCD suggests a hidden concentration pattern. While contract volume is distributed across multiple players, market value is disproportionately captured by a dominant hub.\n"
-        else:
-            report += "> ✅ **Market Competition**: Balanced market structure showing low concentration and active competitive dialogue.\n"
+    hhi_res = interpret_hhi(hhi)
+    report += format_interpretation("HHI", hhi_res)
+    report += "\n"
 
-    # Network Entropy
-    if entropy.get("status") == "ok":
-        hx_norm = entropy.get("H_X_normalized", 1.0)
-        report += f"- **Network Entropy**: H(X) = `{entropy.get('H_X', 0.0):.3f}` (Norm: `{hx_norm:.3f}`) | H(Y) = `{entropy.get('H_Y', 0.0):.3f}` (Norm: `{hy_norm:.3f}`)\n"
-        if hx_norm < 0.7:
-            report += "  → Oligopsonistic patterns: the demand side is dominated by a few contracting authorities.\n"
-        if hy_norm < 0.7:
-            report += "  → Oligopolistic patterns: the supply side is dominated by a few key contractors.\n"
-
-    # Conditional Entropy
-    if cond.get("status") == "ok":
-        hyx = cond.get("H_Y_given_X", 0.0)
-        hxy = cond.get("H_X_given_Y", 0.0)
-        report += f"- **Conditional Entropy**: H(Y|X) = `{hyx:.3f}` | H(X|Y) = `{hxy:.3f}`\n"
-        if hyx <= 1.0:
-            report += "  → 🚩 **Preferential Treatment**: Low conditional entropy H(Y|X) indicates that contracting authorities systematically direct awards to specific suppliers.\n"
-        if hxy <= 1.0:
-            report += "  → 🚩 **Vendor Lock-in / Dependence**: Low conditional entropy H(X|Y) indicates that suppliers are structurally dependent on a very small set of buyers.\n"
-
-    # ----------------------------------------------------
-    # 2. DIVERGENCE ANALYSIS (VCD)
-    # ----------------------------------------------------
-    report += f"\n### 📈 2. DIVERGENCE ANALYSIS (Ανάλυση VCD)\n"
-    if vcd_data.get("status") == "ok":
-        rho = vcd_data.get("spearman_rho", 0.0)
-        rho_vcd = vcd_data.get("rho_vcd", 0.0)
-        dg = vcd_data.get("delta_gini", 0.0)
-        gv = vcd_data.get("gini_value", 0.0)
-        gc_val = vcd_data.get("gini_count", 0.0)
-        vcd_norm = vcd_data.get("vcd_normalized", 0.0)
-        
-        report += f"- **ρ_VCD (Rank Divergence)**: `{rho_vcd:.4f}` (Spearman ρ: `{rho:.4f}`)\n"
-        report += f"- **ΔGini (Inequality Divergence)**: `{dg:.4f}` (Gini Value: `{gv:.4f}` | Gini Count: `{gc_val:.4f}`)\n"
-        report += f"- **Unified VCD Score (Total)**: `{vcd_t:.4f}` (Normalized: `{vcd_norm:.4f}`)\n"
-
-        # VCD interpretation:
-        if vcd_t > 0.4:
-            report += "> ⚠️ **Unified Divergence**: Strong structural divergence between participation and value capture detected. Key suppliers are capturing disproportionate contract values while volume distribution seems competitive.\n"
-        if dg > 0.1:
-            report += "> 🚩 **Inequality Divergence**: Value concentration exceeds participation distribution. The financial inequality among suppliers is much higher than the inequality in the sheer number of contract awards.\n"
-    else:
-        report += "Δεν υπάρχουν επαρκή δεδομένα VCD για ανάλυση απόκλισης.\n"
-
-    # ----------------------------------------------------
-    # 3. RECURRENCE MECHANISMS
-    # ----------------------------------------------------
-    report += f"\n### 🔄 3. RECURRENCE MECHANISMS (Μηχανισμοί Επαναληψιμότητας)\n"
-    if recurrence_data.get("status") == "ok":
-        hf_m = recurrence_data.get("hf_mean") or 0.0
-        hf_x = recurrence_data.get("hf_max") or 0.0
-        pa_m = recurrence_data.get("pa_mean") or 0.0
-        aa_m = recurrence_data.get("aa_mean") or 0.0
-        
-        report += f"- **Historical Frequency (HF_mean)**: `{hf_m:.2f}` (Max: `{hf_x:.0f}`)\n"
-        report += f"- **Preferential Attachment (PA_mean)**: `{pa_m:.2f}`\n"
-        report += f"- **Adamic-Adar adapted (AA_mean)**: `{aa_m:.4f}`\n"
-
-        # Recurrence interpretation:
-        if hf_m > 2.0:
-            report += "> ⏳ **Routinised Contracting**: Market exhibits strong historical persistence (routinised contracting) where identical buyer-supplier dyads repeat over years.\n"
-        if pa_m > 100.0:
-            report += "> 🕸️ **Hub Dominance**: Market structure driven by preferential attachment (hub dominance). Large, well-connected suppliers attract new awards at a faster rate.\n"
-        if aa_m > 0.5:
-            report += "> 🧩 **Specialised Niche**: Market shows niche or context-dependent matching based on bipartite shared neighbors.\n"
-
-        # Dominant recurrence mechanism using normalized scores
-        hf_score = hf_m / 3.0
-        pa_score = pa_m / 100.0
-        aa_score = aa_m / 0.5
-        scores = {"HF": hf_score, "PA": pa_score, "AA": aa_score}
-        dom_key = max(scores, key=scores.get)
-        
-        dom_map = {
-            "HF": "routinised continuity",
-            "PA": "network-driven concentration",
-            "AA": "specialised niche matching"
-        }
-        report += f"> 🎯 **Dominant Mechanism**: The structural network dynamic is predominantly characterized by **{dom_map[dom_key]}**.\n"
-    else:
-        report += "Δεν υπάρχουν επαρκή δεδομένα δικτύου για ανάλυση επαναληψιμότητας.\n"
-
-    # ----------------------------------------------------
-    # 4. INSTITUTIONAL STRUCTURE (ICI)
-    # ----------------------------------------------------
-    report += f"\n### 🏢 4. INSTITUTIONAL STRUCTURE (Θεσμικό Κλείσιμο)\n"
     if ici_data.get("status") == "ok":
-        ici_val = ici_data.get("ici", 0.0)
-        cl_level = ici_data.get("closure_level", "ΧΑΜΗΛΟ")
-        fl = ici_data.get("closure_flag", "green")
-        fl_icon = "🔴" if fl == "red" else ("🟡" if fl == "yellow" else "🟢")
+        ici_res = interpret_ici(ici_data.get("ici", 0.0))
+        report += format_interpretation("ICI", ici_res)
+        report += "\n"
+
+    # 2. NETWORK STRUCTURE
+    report += f"### 🌐 NETWORK STRUCTURE (Market Level)\n"
+    report += f"Scope: Δίκτυο αγοράς (network-level)\n\n"
+
+    hy_norm = entropy.get("H_Y_normalized") if entropy.get("status") == "ok" and entropy.get("H_Y_normalized") is not None else None
+    if hy_norm is not None:
+        ent_res = interpret_entropy(hy_norm)
+        report += format_interpretation("Entropy_normalized H(Y)", ent_res)
+        report += "\n"
+
+    vcd_t = vcd_data.get("vcd_total")
+    if vcd_data.get("status") == "ok" and vcd_t is not None:
+        vcd_res = interpret_vcd(vcd_t)
+        report += format_interpretation("VCD", vcd_res)
+        report += "\n"
+
+    # 3. RECURRENCE
+    report += f"### 🔁 RECURRENCE (Multi-year Network)\n"
+    report += f"Scope: Πολυετές Δίκτυο Αγοράς\n\n"
+    if recurrence_data.get("status") == "ok":
+        pa_res = interpret_pa(recurrence_data.get("pa_mean", 0.0))
+        report += format_interpretation("PA_mean", pa_res)
+        report += "\n"
+
+        hf_res = interpret_hf(recurrence_data.get("hf_mean", 0.0))
+        report += format_interpretation("HF_mean", hf_res)
+        report += "\n"
         
-        report += f"- **Institutional Closure Index (ICI)**: `{ici_val:.4f}` {fl_icon} ({cl_level})\n"
-        if ici_val > 0.1:
-            report += "> ⚠️ **Institutional Closure**: High ICI indicates institutional closure and limited competitive access. Relationships between buyers and suppliers are locked, preventing external entry.\n"
-        else:
-            report += "> ✅ **Open Procurement**: Low ICI indicates an open, fluid market allowing high player mobility and entry.\n"
+        aa_res = interpret_aa(recurrence_data.get("aa_mean", 0.0))
+        report += format_interpretation("AA_mean", aa_res)
+        report += "\n"
     else:
-        report += "Δεν υπάρχουν επαρκή δεδομένα για τον υπολογισμό του Institutional Closure Index (ICI).\n"
+        report += "Δεν υπάρχουν επαρκή δεδομένα δικτύου για ανάλυση επαναληψιμότητας.\n\n"
 
-    # ----------------------------------------------------
-    # 5. FINAL DIAGNOSIS
-    # ----------------------------------------------------
-    report += f"\n### 🩺 5. FINAL DIAGNOSIS (Τελικό Πόρισμα & Θεραπεία)\n"
+    # 4. FINAL DIAGNOSIS
+    report += f"### 📊 FINAL DIAGNOSIS\n\n"
     
-    # Recurrence values for typology classification
-    hf_m = (recurrence_data.get("hf_mean") or 0.0) if recurrence_data.get("status") == "ok" else 0.0
-    pa_m = (recurrence_data.get("pa_mean") or 0.0) if recurrence_data.get("status") == "ok" else 0.0
-    aa_m = (recurrence_data.get("aa_mean") or 0.0) if recurrence_data.get("status") == "ok" else 0.0
-
-    # Market Typology Classification Label
-    if hhi > 0.15:
-        if vcd_t > 0.4:
-            if pa_m > 100.0:
-                market_type = "Closed Oligopolistic Hub (High Concentration & High Network Dominance)"
-            elif hf_m > 2.0:
-                market_type = "Routinised Duopoly / Oligopoly (Persistent Recurrent Imbalance)"
-            else:
-                market_type = "Standard Concentrated Market (Oligopolistic Capture)"
-        else:
-            market_type = "Oligopolistic Volume Capture (Concentrated but Value-Proportional)"
-    else:
-        if vcd_t > 0.4:
-            if pa_m > 100.0:
-                market_type = "Asymmetric Network-Driven Capture (Hidden Value Concentration via Supplier Position)"
-            elif hf_m > 2.0:
-                market_type = "Routinised Closed Market (Hidden Persistent Capture)"
-            else:
-                market_type = "Asymmetric Value-Capture Market (Hidden Concentration)"
-        else:
-            if aa_m > 0.5:
-                market_type = "Specialised Niche Market (High Specialisation / Low General Concentration)"
-            else:
-                market_type = "Open Competitive Market (Healthy Competitive Dynamics)"
-
-    report += f"- **Market Type (Τυπολογία Αγοράς)**: `{market_type}`\n\n"
-
-    # Combined structural diagnosis
-    combined_diagnoses = []
-    if vcd_t > 0.4:
-        if recurrence_data.get("status") == "ok":
-            if pa_m > 100.0:
-                combined_diagnoses.append("Concentration driven by network position of key suppliers")
-            if hf_m > 2.0:
-                combined_diagnoses.append("Persistent incumbency and repeated contracting patterns")
-            if aa_m > 0.5:
-                combined_diagnoses.append("Specification-driven or niche-based allocation patterns")
+    report += format_interpretation("HHI", hhi_res)
+    report += "\n"
     
-    if combined_diagnoses:
-        report += f"**Structural Insights**:\n"
-        for cd in combined_diagnoses:
-            report += f"- 🚩 {cd}\n"
-    else:
-        report += "Market dynamics appear stable, showing no severe systemic imbalances.\n"
-
-    # Therapy recommendations
-    needs_action = hhi > 0.15 or top_share > 0.4 or ici_data.get("closure_flag") == "red" or vcd_t > 0.4
-    report += "\n**Προτεινόμενη Θεραπεία (Ν.4412/2016)**:\n"
-    if needs_action:
-        report += "- **Κατάτμηση σε Τμήματα** (Άρθρο 59): Συστήνεται η διαίρεση μεγάλων συμβάσεων σε αυτόνομα τμήματα για την ενθάρρυνση συμμετοχής ΜμΕ.\n"
-        report += "- **Market Sounding**: Διενέργεια εκτενούς προκαταρκτικής διαβούλευσης της αγοράς για τον εντοπισμό εναλλακτικών παρόχων.\n"
-        if ici_data.get("closure_flag") == "red" or vcd_t > 0.5:
-            report += "- **Ειδικός Έλεγχος (Audit)**: Εφαρμογή εντατικών ποιοτικών ελέγχων (Άρθρο 73) λόγω υψηλού βαθμού θεσμικού κλεισίματος ή/και ακραίου value capture.\n"
-    else:
-        report += "Συνιστάται η διατήρηση της υφιστάμενης στρατηγικής ανοικτού ανταγωνισμού και η συνεχής παρακολούθηση των δεικτών.\n"
+    if recurrence_data.get("status") == "ok":
+        report += format_interpretation("HF_mean", hf_res)
+        report += "\n"
+        report += format_interpretation("PA_mean", pa_res)
+        report += "\n"
+        
+    if ici_data.get("status") == "ok":
+        report += format_interpretation("ICI", ici_res)
+        report += "\n"
 
     return report
