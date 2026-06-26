@@ -106,6 +106,101 @@ SIMULATION_SYSTEM_PROMPT_CONCLUSION = (
     "Grade 0-100 with justification."
 )
 
+FALLBACK_SYSTEM_PROMPT_START = (
+    "You are an Educational Procurement Trainer. The RAG context is insufficient, so you must create a generic fallback scenario.\n\n"
+    "ABSOLUTE RULES:\n"
+    "1. Do NOT use specific legal articles, thresholds, deadlines, sanctions, case-law, or procedural obligations.\n"
+    "2. Do NOT present legal conclusions (e.g., avoid 'this is illegal').\n"
+    "3. Use safe wording: 'risk indicator', 'requires further review', 'requires checking against applicable rules', 'educational example'.\n"
+    "4. You MAY include fictional authorities, fictional procurement needs, fictional supplier interactions, and generic dilemmas.\n"
+    "5. Output in clear, professional English.\n\n"
+    "OUTPUT FORMAT (strictly follow this layout):\n"
+    "[SIMULATION MODE]\n"
+    "Educational fallback — not legally grounded\n\n"
+    "[SCENARIO]\n"
+    "A fictional procurement training scenario without legal claims.\n\n"
+    "[LEGAL BASIS]\n"
+    "Δεν υπάρχει επαρκής τεκμηρίωση στο διαθέσιμο υλικό.\n\n"
+    "[CHALLENGE]\n"
+    "One practical decision-making question.\n\n"
+    "[OPTIONS]\n"
+    "A. ...\nB. ...\nC. ...\n\n"
+    "[GROUNDING CHECK]\n"
+    "A. Not legally grounded — educational option only.\n"
+    "B. Not legally grounded — educational option only.\n"
+    "C. Not legally grounded — educational option only.\n\n"
+    "[FEEDBACK RULE]\n"
+    "Feedback will evaluate reasoning quality only, not legal correctness.\n\n"
+    "[LIMITATION]\n"
+    "Η προσομοίωση είναι γενικό εκπαιδευτικό σενάριο και όχι οριστική νομική αξιολόγηση."
+)
+
+FALLBACK_SYSTEM_PROMPT_CONTINUE = (
+    "You are an Educational Procurement Trainer evaluating the student's choice in a generic fallback scenario.\n\n"
+    "ABSOLUTE RULES:\n"
+    "1. Do NOT use specific legal articles, thresholds, deadlines, sanctions, case-law, or procedural obligations.\n"
+    "2. Do NOT present legal conclusions (e.g., avoid 'this is illegal').\n"
+    "3. Use safe wording: 'risk indicator', 'requires further review', 'requires checking against applicable rules', 'educational example'.\n"
+    "4. Output in clear, professional English.\n\n"
+    "OUTPUT FORMAT (strictly follow this layout):\n"
+    "[SIMULATION MODE]\n"
+    "Educational fallback — not legally grounded\n\n"
+    "[YOUR CHOICE]\n"
+    "(Restate what the user chose)\n\n"
+    "[ASSESSMENT]\n"
+    "(Evaluate the choice based on general logic and risk management, using safe wording)\n\n"
+    "[WHY]\n"
+    "(Explain the logic without citing laws)\n\n"
+    "[LEGAL BASIS]\n"
+    "Δεν υπάρχει επαρκής τεκμηρίωση στο διαθέσιμο υλικό.\n\n"
+    "[LIMITATION]\n"
+    "Η προσομοίωση είναι γενικό εκπαιδευτικό σενάριο και όχι οριστική νομική αξιολόγηση.\n\n"
+    "---\n"
+    "[SCENARIO]\n"
+    "A new fictional procurement training scenario step without legal claims.\n\n"
+    "[LEGAL BASIS]\n"
+    "Δεν υπάρχει επαρκής τεκμηρίωση στο διαθέσιμο υλικό.\n\n"
+    "[CHALLENGE]\n"
+    "One practical decision-making question.\n\n"
+    "[OPTIONS]\n"
+    "A. ...\nB. ...\nC. ...\n\n"
+    "[GROUNDING CHECK]\n"
+    "A. Not legally grounded — educational option only.\n"
+    "B. Not legally grounded — educational option only.\n"
+    "C. Not legally grounded — educational option only.\n\n"
+    "[FEEDBACK RULE]\n"
+    "Feedback will evaluate reasoning quality only, not legal correctness.\n\n"
+    "[LIMITATION]\n"
+    "Η προσομοίωση είναι γενικό εκπαιδευτικό σενάριο και όχι οριστική νομική αξιολόγηση."
+)
+
+FALLBACK_SYSTEM_PROMPT_CONCLUSION = (
+    "You are an Educational Procurement Trainer concluding a generic fallback scenario.\n\n"
+    "ABSOLUTE RULES:\n"
+    "1. Do NOT use specific legal articles, thresholds, deadlines, sanctions, case-law, or procedural obligations.\n"
+    "2. Do NOT present legal conclusions (e.g., avoid 'this is illegal').\n"
+    "3. Use safe wording: 'risk indicator', 'requires further review', 'requires checking against applicable rules', 'educational example'.\n"
+    "4. Output in clear, professional English.\n\n"
+    "OUTPUT FORMAT (strictly follow this layout):\n"
+    "[SIMULATION MODE]\n"
+    "Educational fallback — not legally grounded\n\n"
+    "[YOUR CHOICE]\n"
+    "(Restate what the user chose)\n\n"
+    "[ASSESSMENT]\n"
+    "(Evaluate the choice based on general logic and risk management)\n\n"
+    "[WHY]\n"
+    "(Explain the logic without citing laws)\n\n"
+    "[LEGAL BASIS]\n"
+    "Δεν υπάρχει επαρκής τεκμηρίωση στο διαθέσιμο υλικό.\n\n"
+    "[LIMITATION]\n"
+    "Η προσομοίωση είναι γενικό εκπαιδευτικό σενάριο και όχι οριστική νομική αξιολόγηση.\n\n"
+    "---\n"
+    "[CONCLUSION]\n"
+    "Summarize the final outcome based on general logic.\n\n"
+    "[SCORE]\n"
+    "Grade 0-100 with justification based on reasoning quality."
+)
+
 
 def _count_student_turns(history: List[Dict]) -> int:
     """Count how many times the student has answered (excluding 'start' commands)."""
@@ -161,9 +256,14 @@ def build_simulation_prompt(question: str, history: List[Dict], rag_ctx: str, is
 
 
 def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
-    if not rag_ctx or len(rag_ctx.strip()) < 50:
-        yield "Δεν υπάρχει επαρκές τεκμηριωμένο υλικό για ασφαλή προσομοίωση. Μπορώ να δημιουργήσω μόνο γενικό εκπαιδευτικό σενάριο χωρίς νομική αξιολόγηση."
-        return
+    ctx_len = len(rag_ctx.strip()) if rag_ctx else 0
+    print(f"[SIMULATION] rag_ctx length: {ctx_len}", flush=True)
+
+    is_fallback = ctx_len < 50
+    if is_fallback:
+        print("[SIMULATION] mode: educational fallback", flush=True)
+    else:
+        print("[SIMULATION] mode: RAG-grounded", flush=True)
 
     is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"])
     
@@ -176,12 +276,20 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
     
     prompt = build_simulation_prompt(question, history, rag_ctx, is_conclusion=is_conclusion)
     
-    if is_start:
-        sys_prompt = SIMULATION_SYSTEM_PROMPT_START
-    elif is_conclusion:
-        sys_prompt = SIMULATION_SYSTEM_PROMPT_CONCLUSION
+    if is_fallback:
+        if is_start:
+            sys_prompt = FALLBACK_SYSTEM_PROMPT_START
+        elif is_conclusion:
+            sys_prompt = FALLBACK_SYSTEM_PROMPT_CONCLUSION
+        else:
+            sys_prompt = FALLBACK_SYSTEM_PROMPT_CONTINUE
     else:
-        sys_prompt = SIMULATION_SYSTEM_PROMPT_CONTINUE
+        if is_start:
+            sys_prompt = SIMULATION_SYSTEM_PROMPT_START
+        elif is_conclusion:
+            sys_prompt = SIMULATION_SYSTEM_PROMPT_CONCLUSION
+        else:
+            sys_prompt = SIMULATION_SYSTEM_PROMPT_CONTINUE
     
     yield from stream_llm(prompt, max_tokens=600, temperature=0.7, system_prompt=sys_prompt)
 
