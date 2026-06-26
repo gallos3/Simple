@@ -3,6 +3,9 @@ Procurement Simulation Engine - Serious Game Logic (V3 - Server-Side Turn Contro
 The LLM cannot be trusted to track turns or end the game. We enforce it here.
 """
 import re
+import os
+import json
+import glob
 from typing import List, Dict, Generator
 from ai.llm_interface import call_llm, stream_llm
 
@@ -423,6 +426,175 @@ You can ask for another professional scenario, or answer "next" to continue with
 
 [LIMITATION]
 This is a professional training simulation. It is not legal advice and does not constitute a final legal assessment."""
+
+def validate_scenario_graph(graph: dict) -> tuple[bool, list[str]]:
+    errors = []
+    
+    # 1. Required top-level fields
+    required_keys = ["scenario_id", "title", "validation_status", "start_node", "max_steps", "nodes"]
+    for k in required_keys:
+        if k not in graph:
+            errors.append(f"Missing required key: {k}")
+            
+    if errors:
+        return False, errors
+        
+    # 2. validation_status
+    if graph["validation_status"] not in ["draft", "needs_review", "approved", "active"]:
+        errors.append(f"Invalid validation_status: {graph['validation_status']}")
+        
+    # 3. review.approval_status
+    review = graph.get("review", {})
+    if review.get("approval_status") not in ["needs_review", "approved"]:
+        errors.append(f"Invalid review.approval_status: {review.get('approval_status')}")
+        
+    # 4. start_node
+    start_node = graph["start_node"]
+    nodes = graph["nodes"]
+    if start_node not in nodes:
+        errors.append(f"start_node '{start_node}' not found in nodes")
+        
+    # 5, 6, 7, 8. Nodes and Options
+    for node_id, node in nodes.items():
+        for nk in ["text", "challenge", "options"]:
+            if nk not in node:
+                errors.append(f"Node '{node_id}' missing {nk}")
+        if "options" in node:
+            options = node["options"]
+            if set(options.keys()) != {"A", "B", "C"}:
+                errors.append(f"Node '{node_id}' options must be exactly A, B, C")
+            for opt_key, opt in options.items():
+                for ok in ["text", "next_node", "score_delta", "time_delta", "audit_risk_delta", "admin_burden_delta", "value_for_money_risk_delta", "feedback", "expert_log"]:
+                    if ok not in opt:
+                        errors.append(f"Node '{node_id}' Option '{opt_key}' missing {ok}")
+                
+                if "next_node" in opt:
+                    nn = opt["next_node"]
+                    if nn != "END" and nn not in nodes:
+                        errors.append(f"Node '{node_id}' Option '{opt_key}' next_node '{nn}' does not exist")
+        
+        # 11. Dangerous terms
+        dangerous_terms = [
+            "illegal", 
+            "legally compliant", 
+            "compliance failure", 
+            "sanction", 
+            "court decision", 
+            "exact threshold", 
+            "exact article",
+            "violates",
+            "must comply with article",
+            "according to article"
+        ]
+        text_fields = [node.get("text", ""), node.get("challenge", "")]
+        if "options" in node:
+            for opt in node["options"].values():
+                text_fields.extend([opt.get("text", ""), opt.get("feedback", ""), opt.get("expert_log", "")])
+        
+        is_rag_grounded = graph.get("authoring_source_mode") == "rag_grounded"
+        has_source_snippets = bool(graph.get("source_snippets")) or bool(graph.get("source_basis_snippets"))
+        
+        if not (is_rag_grounded and has_source_snippets):
+            for t in text_fields:
+                t_lower = t.lower()
+                for dt in dangerous_terms:
+                    if dt in t_lower:
+                        errors.append(f"Node '{node_id}' contains dangerous term '{dt}' without valid RAG snippets")
+                        
+    # 9. Path reaches END
+    ends_reached = 0
+    def dfs(node_id, depth):
+        nonlocal ends_reached
+        if depth > graph["max_steps"]:
+            return False
+        node = nodes[node_id]
+        if "options" not in node:
+            return False
+        for opt in node["options"].values():
+            nn = opt.get("next_node")
+            if nn == "END":
+                ends_reached += 1
+            elif nn in nodes:
+                dfs(nn, depth + 1)
+        return True
+        
+    if start_node in nodes:
+        dfs(start_node, 1)
+    if ends_reached == 0:
+        errors.append("No path reaches 'END'")
+        
+    # 10. max_steps
+    if graph["max_steps"] > 6:
+        errors.append("max_steps must be <= 6")
+        
+    return len(errors) == 0, errors
+
+
+def load_json_scenario_graphs(graphs_dir: str = None) -> dict:
+    if graphs_dir is None:
+        graphs_dir = os.path.join(os.path.dirname(__file__), "graphs")
+        
+    loaded_graphs = {}
+    if not os.path.exists(graphs_dir):
+        return loaded_graphs
+        
+    for filepath in glob.glob(os.path.join(graphs_dir, "*.json")):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                graph = json.load(f)
+            
+            is_valid, errors = validate_scenario_graph(graph)
+            scenario_id = graph.get("scenario_id", os.path.basename(filepath))
+            
+            if is_valid:
+                if graph.get("validation_status") == "active" and graph.get("review", {}).get("approval_status") == "approved":
+                    loaded_graphs[scenario_id] = graph
+                    print(f"[GRAPH VALIDATION] {scenario_id}: active and loaded")
+                else:
+                    print(f"[GRAPH VALIDATION] {scenario_id}: valid draft, not active")
+            else:
+                print(f"[GRAPH VALIDATION] {scenario_id}: invalid - {errors}")
+        except Exception as e:
+            print(f"[GRAPH VALIDATION] Failed to load {filepath}: {e}")
+            
+    return loaded_graphs
+
+
+def list_available_graphs() -> dict:
+    json_graphs = load_json_scenario_graphs()
+    graphs_dir = os.path.join(os.path.dirname(__file__), "graphs")
+    draft_graphs = []
+    validation_errors = {}
+    
+    if os.path.exists(graphs_dir):
+        for filepath in glob.glob(os.path.join(graphs_dir, "*.json")):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    graph = json.load(f)
+                is_valid, errors = validate_scenario_graph(graph)
+                sid = graph.get("scenario_id", os.path.basename(filepath))
+                if not is_valid:
+                    validation_errors[sid] = errors
+                elif graph.get("validation_status") != "active" or graph.get("review", {}).get("approval_status") != "approved":
+                    draft_graphs.append(sid)
+            except Exception as e:
+                validation_errors[os.path.basename(filepath)] = str(e)
+                
+    return {
+        "in_code_graphs": list(SCENARIO_GRAPHS.keys()),
+        "json_draft_graphs": draft_graphs,
+        "json_active_graphs": list(json_graphs.keys()),
+        "validation_errors": validation_errors
+    }
+
+
+def select_labyrinth_scenario(question: str) -> str:
+    q = question.lower()
+    if any(k in q for k in ["urgent", "urgency", "urgent procurement", "κατεπείγον", "κατεπείγουσα ανάγκη"]):
+        return "urgent_need_justification"
+    if any(k in q for k in ["technical specifications", "specifications", "φωτογραφικές προδιαγραφές", "προδιαγραφές"]):
+        return "technical_specifications_bias"
+    return "direct_award_fragmentation"
 
 SCENARIO_GRAPHS = {
     "direct_award_fragmentation": {
