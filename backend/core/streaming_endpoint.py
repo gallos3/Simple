@@ -278,15 +278,20 @@ def add_streaming_routes(app: Flask):
 
             # Auto-exit simulation on intent change
             is_in_simulation = any(
-                "SCENARIO" in msg.get("text", "")
-                for msg in history if msg.get("role") == "assistant"
+                "SCENARIO" in msg.get("text", "") or "[SIMULATION MODE]" in msg.get("text", "")
+                for msg in history if msg.get("role") in ("assistant", "bot")
             )
 
             if is_in_simulation:
-                isolated_intent = detect_intent(question, [])
-                if isolated_intent != "procurement_simulation":
-                    history.clear()
-                    intent = isolated_intent
+                q_clean = question.strip().lower()
+                is_choice = q_clean in ['a', 'b', 'c', 'α', 'β', 'γ', 'next'] or re.match(r'^(option|επιλογή|διάλεξα|choose|select)\s+[abcαβγ]$', q_clean, re.IGNORECASE)
+                if is_choice:
+                    intent = "procurement_simulation"
+                else:
+                    isolated_intent = detect_intent(question, [])
+                    if isolated_intent != "procurement_simulation":
+                        history.clear()
+                        intent = isolated_intent
 
             # === Early graph-type detection (before entity extraction) ===
             # Normalize accents so "περισσότερες" matches "περισσοτερ"

@@ -668,6 +668,29 @@ SCENARIO_GRAPHS = {
     }
 }
 
+def get_msg_text(msg: dict) -> str:
+    return (
+        msg.get("text")
+        or msg.get("content")
+        or msg.get("message")
+        or msg.get("answer")
+        or msg.get("value")
+        or ""
+    )
+
+def find_latest_labyrinth_context(history: list) -> dict:
+    for msg in reversed(history):
+        text = get_msg_text(msg)
+        if "[SIMULATION MODE]\nProfessional Procurement Labyrinth" in text and "[SCENARIO_ID]\n" in text and "[CURRENT_NODE]\n" in text:
+            id_match = re.search(r'\[SCENARIO_ID\]\n([^\n]+)', text)
+            node_match = re.search(r'\[CURRENT_NODE\]\n([^\n]+)', text)
+            if id_match and node_match:
+                return {
+                    "scenario_id": id_match.group(1).strip(),
+                    "current_node": node_match.group(1).strip()
+                }
+    return None
+
 def extract_choice(user_text: str):
     text = user_text.strip().lower()
     choice_map = {
@@ -724,11 +747,18 @@ def replay_labyrinth_state(history: list, scenario_id: str) -> dict:
     started = False
     for msg in history:
         role = msg.get("role", "")
-        text = msg.get("text", msg.get("content", msg.get("message", "")))
+        text = get_msg_text(msg)
         
         if role in ["assistant", "bot"]:
-            if "[SIMULATION MODE]\nProfessional Procurement Labyrinth" in text and f"[SCENARIO_ID]\n{scenario_id}" in text:
+            if "[SIMULATION MODE]\nProfessional Procurement Labyrinth" in text and f"[SCENARIO_ID]\n{scenario_id}" in text and "[STEP]\n1 /" in text:
                 started = True
+                state["current_node"] = graph["start_node"]
+                state["step_count"] = 0
+                state["path"] = [graph["start_node"]]
+                state["choices"] = []
+                state["metrics"] = {"score_delta": 0, "time_cost": 0, "audit_risk": 0, "admin_burden": 0, "value_for_money_risk": 0}
+                state["events"] = []
+                state["finished"] = False
                 
         elif role == "user" and started and not state["finished"]:
             choice = extract_choice(text)
@@ -978,46 +1008,55 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
         q_clean = question.strip().lower()
         choice = extract_choice(q_clean)
         
-        scenario_id = None
-        for msg in reversed(history):
-            text = msg.get("text", msg.get("content", msg.get("message", "")))
-            if "[SCENARIO_ID]\n" in text:
-                id_match = re.search(r'\[SCENARIO_ID\]\n([^\n]+)', text)
-                if id_match:
-                    scenario_id = id_match.group(1).strip()
-                    break
-        
-        if choice and scenario_id and scenario_id in SCENARIO_GRAPHS:
-            state = replay_labyrinth_state(history, scenario_id)
-            graph = SCENARIO_GRAPHS[scenario_id]
-            node_data = graph["nodes"].get(state["current_node"])
+        if choice:
+            ctx = find_latest_labyrinth_context(history)
+            scenario_id = ctx["scenario_id"] if ctx else None
             
-            if node_data and choice in node_data["options"] and not state["finished"]:
-                opt = node_data["options"][choice]
+            if scenario_id and scenario_id in SCENARIO_GRAPHS:
+                state = replay_labyrinth_state(history, scenario_id)
+                graph = SCENARIO_GRAPHS[scenario_id]
+                node_data = graph["nodes"].get(state["current_node"])
                 
-                state["choices"].append(choice)
-                state["step_count"] += 1
-                
-                apply_labyrinth_option(state, opt)
-                
-                state["events"].append({
-                    "node": state["current_node"],
-                    "choice": choice,
-                    "feedback": opt["feedback"],
-                    "expert_log": opt["expert_log"]
-                })
-                
-                state["current_node"] = opt["next_node"]
-                state["path"].append(opt["next_node"])
-                
-                if state["current_node"] == "END" or state["step_count"] >= graph["max_steps"]:
-                    state["finished"] = True
-                    output = render_labyrinth_final_report(graph, state, choice, opt)
-                else:
-                    output = render_labyrinth_step(graph, state, choice, opt)
+                if node_data and choice in node_data["options"] and not state["finished"]:
+                    opt = node_data["options"][choice]
                     
-                yield from stream_static_text(output, chunk_size=10, delay=0.01)
-                return
+                    state["choices"].append(choice)
+                    state["step_count"] += 1
+                    
+                    apply_labyrinth_option(state, opt)
+                    
+                    state["events"].append({
+                        "node": state["current_node"],
+                        "choice": choice,
+                        "feedback": opt["feedback"],
+                        "expert_log": opt["expert_log"]
+                    })
+                    
+                    state["current_node"] = opt["next_node"]
+                    state["path"].append(opt["next_node"])
+                    
+                    if state["current_node"] == "END" or state["step_count"] >= graph["max_steps"]:
+                        state["finished"] = True
+                        output = render_labyrinth_final_report(graph, state, choice, opt)
+                    else:
+                        output = render_labyrinth_step(graph, state, choice, opt)
+                        
+                    yield from stream_static_text(output, chunk_size=10, delay=0.01)
+                    return
+                
+                
+            # If it's a standalone A/B/C but not in a valid labyrinth context, don't fall back to legacy.
+            recovery_msg = (
+                "[SIMULATION MODE]\n"
+                "Professional Procurement Labyrinth\n\n"
+                "[STATE RECOVERY]\n"
+                "The current labyrinth state could not be recovered from the conversation history.\n\n"
+                "[NEXT STEP]\n"
+                "Please restart the scenario with:\n"
+                "give me a serious game about direct awards"
+            )
+            yield from stream_static_text(recovery_msg, chunk_size=10, delay=0.01)
+            return
                 
         is_labyrinth_trigger = any(k in q_clean for k in ["direct award", "απευθείας ανάθεση", "απευθείας αναθέσεις"])
         if is_labyrinth_trigger:
@@ -1028,14 +1067,9 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
             yield from stream_static_text(output, chunk_size=10, delay=0.01)
             return
 
-        # Legacy fallback safety
+        # Legacy fallback safety - NEVER process A/B/C here anymore
         q_clean_upper = q_clean.upper()
-        if q_clean_upper in ['A', 'B', 'C']:
-            pattern = get_scenario_pattern_from_history(history)
-            output = render_professional_training_feedback(pattern, q_clean_upper)
-            yield from stream_static_text(output, chunk_size=10, delay=0.01)
-            return
-        elif q_clean_upper == 'NEXT':
+        if q_clean_upper == 'NEXT':
             pattern = SCENARIO_PATTERNS["general_risk"]
             output = render_professional_training_start(pattern)
             yield from stream_static_text(output, chunk_size=10, delay=0.01)
