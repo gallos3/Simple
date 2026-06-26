@@ -1,0 +1,146 @@
+{
+  "scenario_id": "technical_specifications_bias",
+  "version": "1.0.0",
+  "validation_status": "draft",
+  "authoring_source_mode": "manual_expert",
+  "title": "Technical Specifications Bias",
+  "learning_objectives": [
+    "Detect bias indicators in specs",
+    "Convert brand-like requirements to functional requirements",
+    "Document market availability to ensure competition"
+  ],
+  "red_flags": [
+    "Specs mirroring a specific vendor brochure",
+    "Extremely narrow dimensions or proprietary features",
+    "Unjustified exclusion of equivalent standards"
+  ],
+  "source_basis": "Expert generated scenario",
+  "risk_pattern": "Restrictive specifications",
+  "review": {
+    "reviewed_by": "manual",
+    "review_date": "2026-06-26",
+    "review_notes": "Pending review",
+    "approval_status": "needs_review"
+  },
+  "start_node": "n1",
+  "max_steps": 6,
+  "nodes": {
+    "n1": {
+      "text": "A technical department submits specifications that read identically to a specific product brochure.",
+      "challenge": "What is your initial action?",
+      "options": {
+        "A": {
+          "text": "Request the department to rewrite the specs focusing on functional requirements and equivalent standards.",
+          "next_node": "n2",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -2,
+          "feedback": "Correct. Functional requirements ensure broad competition and better value.",
+          "expert_log": "Required rewrite of specs to functional requirements."
+        },
+        "B": {
+          "text": "Publish the specs as-is to save time and meet the department request.",
+          "next_node": "n3",
+          "score_delta": -15,
+          "time_delta": -1,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 0,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Publishing biased specs severely restricts competition and increases audit risk.",
+          "expert_log": "Published restrictive specifications without review."
+        },
+        "C": {
+          "text": "Add an \"or equivalent\" clause at the end of the document without changing the specific metrics.",
+          "next_node": "END",
+          "score_delta": -5,
+          "time_delta": 1,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Adding \"or equivalent\" is insufficient if the core metrics still practically exclude all other vendors.",
+          "expert_log": "Used weak mitigation (or equivalent clause) on highly restrictive specs."
+        }
+      }
+    },
+    "n2": {
+      "text": "The department argues the functional specs might allow inferior products to win.",
+      "challenge": "How do you ensure quality without restricting competition?",
+      "options": {
+        "A": {
+          "text": "Implement objective performance criteria and quality thresholds in the evaluation phase.",
+          "next_node": "END",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -2,
+          "feedback": "Excellent. Objective performance criteria protect quality while maintaining open competition.",
+          "expert_log": "Implemented performance-based evaluation criteria."
+        },
+        "B": {
+          "text": "Revert to the original brand-specific specs to ensure quality.",
+          "next_node": "END",
+          "score_delta": -10,
+          "time_delta": 1,
+          "audit_risk_delta": 3,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Reverting to biased specs weakens the audit defensibility of the tender.",
+          "expert_log": "Reverted to restrictive specifications under departmental pressure, increasing audit risk."
+        },
+        "C": {
+          "text": "Require bidders to provide samples of the specific brand.",
+          "next_node": "END",
+          "score_delta": -15,
+          "time_delta": 2,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Requiring a specific brand sample may severely restrict competition and requires further procurement review.",
+          "expert_log": "Required specific brand samples, raising severe audit concerns."
+        }
+      }
+    },
+    "n3": {
+      "text": "During the tender, multiple suppliers complain that the specs are tailored to one vendor.",
+      "challenge": "How do you handle the complaints?",
+      "options": {
+        "A": {
+          "text": "Suspend the tender, review the specs, and issue a corrigendum broadening the requirements.",
+          "next_node": "END",
+          "score_delta": 10,
+          "time_delta": 3,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 3,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Corrective action mitigates the risk, though it costs time.",
+          "expert_log": "Suspended tender and issued corrigendum to fix bias."
+        },
+        "B": {
+          "text": "Ignore the complaints as they come from competitors.",
+          "next_node": "END",
+          "score_delta": -20,
+          "time_delta": 0,
+          "audit_risk_delta": 5,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Ignoring valid market complaints invites formal appeals and severe audit findings.",
+          "expert_log": "Ignored valid supplier complaints about restrictive specs."
+        },
+        "C": {
+          "text": "Cancel the tender entirely and use a direct award due to urgency.",
+          "next_node": "END",
+          "score_delta": -25,
+          "time_delta": 2,
+          "audit_risk_delta": 5,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 4,
+          "feedback": "Using urgency to bypass a flawed specification process creates a significant audit concern and requires further review.",
+          "expert_log": "Improperly converted tender to urgent direct award, creating weak evidence trail."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "scenario_id": "urgent_need_justification",
+  "version": "1.0.0",
+  "validation_status": "draft",
+  "authoring_source_mode": "manual_expert",
+  "title": "Urgency and Foreseeability Risk",
+  "learning_objectives": [
+    "Distinguish genuine urgency from poor planning",
+    "Document timeline and operational necessity",
+    "Evaluate internal escalation paths"
+  ],
+  "red_flags": [
+    "Urgency invoked near budget deadlines",
+    "Foreseeable recurring needs treated as urgent",
+    "Lack of timeline documentation"
+  ],
+  "source_basis": "Expert generated scenario",
+  "risk_pattern": "Unjustified urgency",
+  "review": {
+    "reviewed_by": "manual",
+    "review_date": "2026-06-26",
+    "review_notes": "Pending review",
+    "approval_status": "needs_review"
+  },
+  "start_node": "n1",
+  "max_steps": 6,
+  "nodes": {
+    "n1": {
+      "text": "A department requests an urgent procurement citing an immediate operational need, but the supplies are regularly consumed.",
+      "challenge": "How should you process this request?",
+      "options": {
+        "A": {
+          "text": "Review the planning timeline to check if the need was foreseeable.",
+          "next_node": "n2",
+          "score_delta": 10,
+          "time_delta": 1,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Good. Checking foreseeability establishes whether genuine urgency exists.",
+          "expert_log": "Verified foreseeability timeline."
+        },
+        "B": {
+          "text": "Process immediately as an urgent procedure to ensure continuity.",
+          "next_node": "n3",
+          "score_delta": -5,
+          "time_delta": -1,
+          "audit_risk_delta": 3,
+          "admin_burden_delta": 0,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Processing without review risks an audit finding for poor planning.",
+          "expert_log": "Processed urgent request without verifying foreseeability."
+        },
+        "C": {
+          "text": "Reject the request and require standard procedure, halting operations.",
+          "next_node": "END",
+          "score_delta": -10,
+          "time_delta": 3,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Halting operations entirely without investigating alternative coverage harms the public body.",
+          "expert_log": "Halted operations rather than investigating bridge contracts."
+        }
+      }
+    },
+    "n2": {
+      "text": "The timeline shows the need was foreseeable, but failure to act will now cause severe operational disruption.",
+      "challenge": "How to proceed while minimizing risk?",
+      "options": {
+        "A": {
+          "text": "Document the planning failure and escalate for a minimal bridging contract while launching standard procedure.",
+          "next_node": "END",
+          "score_delta": 20,
+          "time_delta": 2,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -2,
+          "feedback": "Excellent. A bridging contract ensures continuity while minimizing audit risk.",
+          "expert_log": "Initiated bridging contract and documented planning failure."
+        },
+        "B": {
+          "text": "Approve the full urgent procedure due to the severe disruption risk.",
+          "next_node": "END",
+          "score_delta": -10,
+          "time_delta": 0,
+          "audit_risk_delta": 3,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Approving full urgency for foreseeable needs is a high audit risk.",
+          "expert_log": "Approved full urgent procedure despite foreseeability."
+        },
+        "C": {
+          "text": "Request the department to alter the dates on their memo to hide the delay.",
+          "next_node": "END",
+          "score_delta": -30,
+          "time_delta": 0,
+          "audit_risk_delta": 5,
+          "admin_burden_delta": 0,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Altering documents creates severe audit concern and requires further review.",
+          "expert_log": "Advised altering internal documentation."
+        }
+      }
+    },
+    "n3": {
+      "text": "The urgent procedure is challenged by an auditor noting the supplies are regular consumables.",
+      "challenge": "How do you respond?",
+      "options": {
+        "A": {
+          "text": "Provide a detailed justification linking the specific delayed delivery to unforeseeable external events.",
+          "next_node": "END",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Strong documentation of external unforeseeable factors mitigates risk.",
+          "expert_log": "Defended urgency with external unforeseeable event documentation."
+        },
+        "B": {
+          "text": "Argue that operational necessity overrides procedural requirements.",
+          "next_node": "END",
+          "score_delta": -15,
+          "time_delta": 0,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Operational necessity alone does not justify circumventing standard procedures if foreseeable.",
+          "expert_log": "Used weak audit defensibility against audit finding."
+        },
+        "C": {
+          "text": "Withdraw the award and cancel the procurement.",
+          "next_node": "END",
+          "score_delta": -10,
+          "time_delta": 3,
+          "audit_risk_delta": 1,
+          "admin_burden_delta": 3,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Canceling late causes disruption and administrative chaos.",
+          "expert_log": "Canceled procurement reactively after audit challenge."
+        }
+      }
+    }
+  }
+}
