@@ -421,15 +421,37 @@ def add_streaming_routes(app: Flask):
                     from simulation.procurement_simulation import stream_simulation
                     yield create_sse_event("action", {"action": "start_simulation", "text": ""})
                     
-                    # NOTE: We intentionally skip RAG for simulations to avoid loading
-                    # the SentenceTransformer embedding model in parallel with the LLM,
-                    # which causes OOM (os error 1455) on memory-constrained machines.
-                    # The simulation system prompts already contain full legal context.
-                    rag_ctx = ""
+                    SIMULATION_USE_RAG = os.getenv("SIMULATION_USE_RAG", "0") == "1"
+                    
+                    if SIMULATION_USE_RAG:
+                        from simulation.procurement_simulation import expand_simulation_query
+                        from rag.legal_rag import search_legal_corpus
+                        
+                        expanded_query = expand_simulation_query(question)
+                        print(f"[SIMULATION] Expanded query for RAG: {expanded_query}", flush=True)
+                        
+                        try:
+                            legal_passages = search_legal_corpus(expanded_query, k=3)
+                            rag_ctx = "\n\n".join(legal_passages) if legal_passages else ""
+                        except Exception as e:
+                            print(f"[SIMULATION] RAG failed: {e}", flush=True)
+                            rag_ctx = ""
+                    else:
+                        print("[SIMULATION] RAG disabled by default. Using fast Training Mode fallback. Set SIMULATION_USE_RAG=1 to enable RAG-grounded simulations.", flush=True)
+                        rag_ctx = ""
                         
                     for token in stream_simulation(question, history, rag_ctx):
                         full_answer_str += token
                         yield create_sse_event("token", token)
+                        
+                    if not full_answer_str.strip():
+                        fallback_msg = (
+                            "[SIMULATION MODE]\n"
+                            "Training Mode — Generic Educational Scenario\n\n"
+                            "The simulation engine did not return a grounded response. Starting a generic training scenario instead."
+                        )
+                        full_answer_str += fallback_msg
+                        yield create_sse_event("token", fallback_msg)
                         
                     # ----------------------------------------------------
                     # REPORT CARD (Φύλλο Αξιολόγησης) στο τέλος του σεναρίου
