@@ -1,7 +1,7 @@
 {
   "scenario_id": "urgent_need_justification",
   "version": "1.0.0",
-  "validation_status": "draft",
+  "validation_status": "active",
   "authoring_source_mode": "manual_expert",
   "title": "Urgency and Foreseeability Risk",
   "learning_objectives": [
@@ -19,8 +19,8 @@
   "review": {
     "reviewed_by": "manual",
     "review_date": "2026-06-26",
-    "review_notes": "Pending review",
-    "approval_status": "needs_review"
+    "review_notes": "Approved after expert review",
+    "approval_status": "approved"
   },
   "start_node": "n1",
   "max_steps": 6,
