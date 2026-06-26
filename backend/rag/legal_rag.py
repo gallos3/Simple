@@ -352,6 +352,41 @@ def add_documents(new_docs: List[Dict[str, Any]]):
     
     print(f"[legal_rag] [OK] Added {len(new_docs)} new chunks to the index.")
 
+def chunk_text(text: str, max_chars: int = 1200, overlap_paragraphs: int = 1) -> List[str]:
+    import re
+    raw_paragraphs = re.split(r'\n\s*\n', text)
+    paragraphs = [p.strip() for p in raw_paragraphs if p.strip()]
+    
+    chunks = []
+    current_chunk = []
+    current_len = 0
+    
+    for p in paragraphs:
+        if len(p) > max_chars:
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+                current_chunk = []
+                current_len = 0
+            
+            step = max(1, max_chars - 200)
+            for j in range(0, len(p), step):
+                chunks.append(p[j:j+max_chars])
+            continue
+            
+        if current_len + len(p) > max_chars and current_chunk:
+            chunks.append("\n\n".join(current_chunk))
+            overlap = current_chunk[-overlap_paragraphs:] if overlap_paragraphs > 0 else []
+            current_chunk = overlap
+            current_len = sum(len(c) for c in current_chunk) + (len(current_chunk) * 2)
+            
+        current_chunk.append(p)
+        current_len += len(p) + 2
+        
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+        
+    return chunks
+
 def ingest_pdf(pdf_path: str | Path, source_name: str = None):
     """
     Διαβάζει ένα PDF, το σπάει σε παραγράφους και το προσθέτει στο RAG.
@@ -370,8 +405,7 @@ def ingest_pdf(pdf_path: str | Path, source_name: str = None):
         if not text:
             continue
             
-        # Απλό σπάσιμο ανά 1000 χαρακτήρες ή παραγράφους
-        chunks = [text[j:j+1200] for j in range(0, len(text), 1000)]
+        chunks = chunk_text(text, max_chars=1200, overlap_paragraphs=1)
         for j, chunk in enumerate(chunks):
             new_docs.append({
                 "id": f"upload_{path.stem}_{i}_{j}",
