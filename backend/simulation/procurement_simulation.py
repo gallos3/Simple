@@ -560,6 +560,22 @@ def load_json_scenario_graphs(graphs_dir: str = None) -> dict:
     return loaded_graphs
 
 
+
+def get_runtime_scenario_graphs() -> dict:
+    try:
+        active_json_graphs = load_json_scenario_graphs()
+    except Exception as e:
+        print(f"[GRAPH RUNTIME] Error loading JSON graphs: {e}")
+        active_json_graphs = {}
+        
+    runtime_graphs = {}
+    runtime_graphs.update(SCENARIO_GRAPHS)
+    runtime_graphs.update(active_json_graphs)
+    
+    print(f"[GRAPH RUNTIME] Loaded active JSON graphs: {list(active_json_graphs.keys())}")
+    print("[GRAPH RUNTIME] Draft JSON graphs are not playable.")
+    return runtime_graphs
+
 def list_available_graphs() -> dict:
     json_graphs = load_json_scenario_graphs()
     graphs_dir = os.path.join(os.path.dirname(__file__), "graphs")
@@ -895,7 +911,8 @@ def apply_labyrinth_option(state: dict, opt: dict):
     state["metrics"]["value_for_money_risk"] = max(0, state["metrics"]["value_for_money_risk"] + opt["value_for_money_risk_delta"])
 
 def replay_labyrinth_state(history: list, scenario_id: str) -> dict:
-    graph = SCENARIO_GRAPHS.get(scenario_id)
+    runtime_graphs = get_runtime_scenario_graphs()
+    graph = runtime_graphs.get(scenario_id)
     if not graph:
         return None
     
@@ -1184,9 +1201,10 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
             ctx = find_latest_labyrinth_context(history)
             scenario_id = ctx["scenario_id"] if ctx else None
             
-            if scenario_id and scenario_id in SCENARIO_GRAPHS:
+            runtime_graphs = get_runtime_scenario_graphs()
+            if scenario_id and scenario_id in runtime_graphs:
                 state = replay_labyrinth_state(history, scenario_id)
-                graph = SCENARIO_GRAPHS[scenario_id]
+                graph = runtime_graphs[scenario_id]
                 node_data = graph["nodes"].get(state["current_node"])
                 
                 if node_data and choice in node_data["options"] and not state["finished"]:
@@ -1230,11 +1248,16 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
             yield from stream_static_text(recovery_msg, chunk_size=10, delay=0.01)
             return
                 
-        is_labyrinth_trigger = any(k in q_clean for k in ["direct award", "απευθείας ανάθεση", "απευθείας αναθέσεις"])
+        is_labyrinth_trigger = any(k in q_clean for k in ["direct award", "απευθείας ανάθεση", "απευθείας αναθέσεις", "urgent", "urgency", "urgent procurement", "κατεπείγον", "κατεπείγουσα ανάγκη", "technical specifications", "specifications", "φωτογραφικές προδιαγραφές", "προδιαγραφές"])
         if is_labyrinth_trigger:
-            scenario_id = "direct_award_fragmentation"
+            scenario_id = select_labyrinth_scenario(q_clean)
+            runtime_graphs = get_runtime_scenario_graphs()
+            
+            if scenario_id not in runtime_graphs:
+                scenario_id = "direct_award_fragmentation"
+                
             state = replay_labyrinth_state([], scenario_id)
-            graph = SCENARIO_GRAPHS[scenario_id]
+            graph = runtime_graphs[scenario_id]
             output = render_labyrinth_start(graph, state)
             yield from stream_static_text(output, chunk_size=10, delay=0.01)
             return
