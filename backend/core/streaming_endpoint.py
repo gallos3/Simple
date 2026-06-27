@@ -63,7 +63,7 @@ def create_sse_event(event_type: str, data: Any) -> str:
         payload["data"] = data
     elif event_type == "error":
         payload["content"] = str(data)
-    elif event_type == "download_report":
+    elif event_type in ("download_report", "graph_preview"):
         payload["data"] = data
     
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -123,11 +123,136 @@ def add_streaming_routes(app: Flask):
         if not question:
             return jsonify({"error": "No question provided"}), 400
 
+        # === ROUTE-LEVEL INSTRUCTOR GRAPH PREVIEW INTERCEPTOR ===
+        q_norm_early = normalize_greek(question)
+        q_clean_preview = question.strip().lower()
+        
+        # === SLASH COMMAND INSTRUCTOR GRAPH PREVIEW ===
+        if q_clean_preview.startswith("/graph ") or q_clean_preview.startswith("/preview "):
+            cmd_parts = q_clean_preview.split(" ", 1)
+            requested_id = cmd_parts[1].strip()
+            
+            allowed_ids = [
+                "direct_award_fragmentation",
+                "urgent_need_justification",
+                "technical_specifications_bias"
+            ]
+            
+            def stream_slash_command_response(sid, valid):
+                yield create_sse_event("start", {"intent": "instructor_graph_preview"})
+                if valid:
+                    msg = (
+                        f"[INSTRUCTOR GRAPH PREVIEW]\n\n"
+                        f"Scenario:\n{sid}\n\n"
+                        f"🕸️ Open graph preview:\n"
+                        f"http://localhost:5051/graph_preview/{sid}.html\n\n"
+                        f"If this link returns 404, generate the preview first using:\n"
+                        f"`python backend/scratch/visualize_graph.py {sid}`"
+                    )
+                    yield from stream_text_chunks(msg, chunk_size=6, delay=0.02)
+                    yield create_sse_event("graph_preview", {
+                        "label": "Open Instructor Graph Preview",
+                        "url": f"/graph_preview/{sid}.html",
+                        "scenario_id": sid
+                    })
+                else:
+                    msg = (
+                        f"Invalid scenario ID '{sid}'.\n\n"
+                        f"Allowed IDs are:\n"
+                        f"- direct_award_fragmentation\n"
+                        f"- urgent_need_justification\n"
+                        f"- technical_specifications_bias"
+                    )
+                    yield from stream_text_chunks(msg, chunk_size=6, delay=0.02)
+                yield create_sse_event("end", {})
+
+            if requested_id in allowed_ids:
+                return Response(
+                    stream_with_context(stream_slash_command_response(requested_id, True)),
+                    mimetype="text/event-stream"
+                )
+            else:
+                return Response(
+                    stream_with_context(stream_slash_command_response(requested_id, False)),
+                    mimetype="text/event-stream"
+                )
+        
+        is_preview_request = False
+        
+        unaccented_keywords = [
+            "show me the simulation graph", "show me the scenario graph", "show graph", 
+            "scenario graph", "simulation graph", "graph preview", "open graph preview",
+            "view scenario graph", "scenario map", "show me the graph for", "graph for direct awards",
+            "δειξε μου τον γραφο", "δειξε μου το γραφο", "δειξε μου το σεναριο προσομοιωσης",
+            "χαρτης σεναριου", "χαρτη σεναριου", "γραφος σεναριου", "γραφο του σεναριου",
+            "ανοιξε το graph preview", "γραφημα σεναριου"
+        ]
+        
+        if any(k in q_clean_preview or k in q_norm_early for k in unaccented_keywords):
+            is_preview_request = True
+            
+        # Broad English condition
+        if "graph" in q_clean_preview and any(k in q_clean_preview for k in ["simulation", "scenario", "direct award", "direct awards", "urgent", "technical specifications"]):
+            is_preview_request = True
+            
+        # Broad Greek condition
+        if any(k in q_norm_early for k in ["γραφο", "γραφημα", "χαρτη"]) and any(k in q_norm_early for k in ["σεναριο", "προσομοιωσης", "κατεπειγον", "απευθειας", "προδιαγραφες"]):
+            is_preview_request = True
+            
+        # Reject normal learner start requests
+        learner_start_keywords = [
+            "give me a serious game", "start simulation", "ξεκινα σεναριο", "δωσε μου παιχνιδι"
+        ]
+        if any(k in q_clean_preview or k in q_norm_early for k in learner_start_keywords):
+            is_preview_request = False
+            
+        if is_preview_request:
+            scenario_id = None
+            if any(k in q_norm_early for k in ["direct award", "direct awards", "απευθειας αναθεση", "απευθειας αναθεσεις", "κατατμηση"]):
+                scenario_id = "direct_award_fragmentation"
+            elif any(k in q_norm_early for k in ["urgent", "urgency", "urgent procurement", "κατεπειγον", "κατεπειγουσα αναγκη"]):
+                scenario_id = "urgent_need_justification"
+            elif any(k in q_norm_early for k in ["technical specifications", "specifications", "προδιαγραφες", "φωτογραφικες προδιαγραφες"]):
+                scenario_id = "technical_specifications_bias"
+            
+            if not scenario_id:
+                for known_id in ["direct_award_fragmentation", "urgent_need_justification", "technical_specifications_bias"]:
+                    if known_id in q_clean_preview:
+                        scenario_id = known_id
+                        break
+                        
+            if scenario_id:
+                print(f"[INSTRUCTOR GRAPH PREVIEW] Route-level intercept before generate/detect_intent: {scenario_id}", flush=True)
+                
+                def stream_instructor_graph_preview(sid):
+                    yield create_sse_event("start", {"intent": "instructor_graph_preview"})
+                    msg = (
+                        f"[INSTRUCTOR GRAPH PREVIEW]\n\n"
+                        f"Scenario:\n{sid}\n\n"
+                        f"🕸️ Open graph preview:\n"
+                        f"http://localhost:5051/graph_preview/{sid}.html\n\n"
+                        f"If this link returns 404, generate the preview first using:\n"
+                        f"`python backend/scratch/visualize_graph.py {sid}`"
+                    )
+                    yield from stream_text_chunks(msg, chunk_size=6, delay=0.02)
+                    yield create_sse_event("graph_preview", {
+                        "label": "Open Instructor Graph Preview",
+                        "url": f"/graph_preview/{sid}.html",
+                        "scenario_id": sid
+                    })
+                    yield create_sse_event("end", {})
+                
+                return Response(
+                    stream_with_context(stream_instructor_graph_preview(scenario_id)),
+                    mimetype="text/event-stream"
+                )
+
         def generate():
             nonlocal question
             from core import engine
             full_answer_str = ""
             
+
             # === 0.5) Pending Auth Flow ===
             if engine.PENDING_AUTH.get("active"):
                 APP_PASSWORD = os.getenv("APP_PASSWORD", "EADHSY")
@@ -299,7 +424,6 @@ def add_streaming_routes(app: Flask):
                 yield from stream_text_chunks("Simulation ended. How can I assist you next?", chunk_size=6, delay=0.02)
                 yield create_sse_event("end", {})
                 return
-
             intent = detect_intent(question, history)
 
             # Auto-exit simulation on intent change
@@ -329,6 +453,8 @@ def add_streaming_routes(app: Flask):
             # === Early graph-type detection (before entity extraction) ===
             # Normalize accents so "περισσότερες" matches "περισσοτερ"
             q_norm = normalize_greek(question)  # removes accents, lowercases
+            
+
             is_graph_request = any(k in q_norm for k in [
                 "γραφημα", "γραφου", "graph", "δικτυο", "γραφο"
             ])

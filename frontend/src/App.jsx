@@ -226,6 +226,7 @@ export default function App() {
     let fullText = "";
     let buffer = ""; // Buffer for partial SSE messages
     let downloadReportData = null; // Store download event payload
+    let graphPreviewData = null; // Store graph preview payload
 
     try {
       console.log("[UI] Fetching /ask_stream...");
@@ -337,7 +338,8 @@ export default function App() {
                 const cleaned = ensureCompleteText(fullText);
                 if (cleaned) {
                   addMessage("bot", cleaned, {
-                    ...(downloadReportData && { download_report: downloadReportData })
+                    ...(downloadReportData && { download_report: downloadReportData }),
+                    ...(graphPreviewData && { graph_preview: graphPreviewData })
                   });
                   
                   // Final check for any remaining text in buffer that wasn't spoken
@@ -353,6 +355,9 @@ export default function App() {
               } else if (data.type === "download_report") {
                 console.log("[UI] Download report event:", data.data || data);
                 downloadReportData = data.data || data;
+              } else if (data.type === "graph_preview") {
+                console.log("[UI] Graph preview event:", data.data || data);
+                graphPreviewData = data.data || data;
               } else if (data.type === "error") {
                 console.error("[UI] Error from server:", data.content);
                 addMessage("bot", `⚠️ ${data.content}`);
@@ -371,7 +376,8 @@ export default function App() {
         const cleaned = ensureCompleteText(fullText);
         if (cleaned) {
           addMessage("bot", cleaned, {
-            ...(downloadReportData && { download_report: downloadReportData })
+            ...(downloadReportData && { download_report: downloadReportData }),
+            ...(graphPreviewData && { graph_preview: graphPreviewData })
           });
           speak(cleaned);
         }
@@ -730,6 +736,18 @@ export default function App() {
                 rel="noopener noreferrer"
               >
                 📥 {m.download_report.label || "Download Expert Review Report"}
+              </a>
+            )}
+
+            {/* View Instructor Graph Preview Button */}
+            {m.graph_preview && (
+              <a
+                href={m.graph_preview.url.startsWith("http") ? m.graph_preview.url : `http://localhost:5051${m.graph_preview.url}`}
+                className="mt-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white font-bold flex w-fit items-center gap-2 transition-colors no-underline shadow-md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                🕸️ {m.graph_preview.label || "Open Instructor Graph Preview"}
               </a>
             )}
 
