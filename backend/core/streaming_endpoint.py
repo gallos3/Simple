@@ -466,41 +466,50 @@ def add_streaming_routes(app: Flask):
                     student_turns = _count_student_turns(history)
                     
                     if (not is_start) and (student_turns >= MAX_TURNS):
-                        yield create_sse_event("token", "\n\n---\n\n(ΑΝΑΜΟΝΗ) _Δημιουργία τελικού Φύλλου Αξιολόγησης..._\n\n")
+                        is_professional_labyrinth_final = (
+                            "[SIMULATION MODE]" in full_answer_str
+                            and "Professional Procurement Labyrinth" in full_answer_str
+                            and "[FINAL REPORT]" in full_answer_str
+                        )
                         
-                        try:
-                            # Evaluate the full transcript (history + the latest question)
-                            full_eval_history = history + [{"role": "user", "text": question}]
-                            report_json_str = generate_report_card(full_eval_history)
-                            import json
-                            report = json.loads(report_json_str)
+                        if is_professional_labyrinth_final:
+                            print("[SIMULATION] Professional Labyrinth final report already generated; skipping legacy report card.", flush=True)
+                        else:
+                            yield create_sse_event("token", "\n\n---\n\n(ΑΝΑΜΟΝΗ) _Δημιουργία τελικού Φύλλου Αξιολόγησης..._\n\n")
                             
-                            md_report = f"### 📋 Φύλλο Αξιολόγησης (Report Card)\n\n"
-                            md_report += f"| Τομέας Αξιολόγησης | Βαθμολογία |\n"
-                            md_report += f"| :--- | :--- |\n"
-                            md_report += f"| ⚖️ Νομική Γνώση | **{report.get('Legal_Knowledge', 'N/A')}/100** |\n"
-                            md_report += f"| ⚠️ Εκτίμηση Κινδύνου | **{report.get('Risk_Assessment', 'N/A')}/100** |\n"
-                            md_report += f"| 🧠 Λήψη Αποφάσεων | **{report.get('Decision_Making', 'N/A')}/100** |\n"
-                            md_report += f"| 🏆 **Συνολικός Βαθμός** | **{report.get('Overall_Grade', 'N/A')}/100** |\n\n"
-                            md_report += f"**Σύνοψη**: {report.get('Summary', '')}\n\n"
-                            
-                            mistakes = report.get('Key_Mistakes', [])
-                            if mistakes:
-                                md_report += "**Βασικά Λάθη**:\n"
-                                if isinstance(mistakes, list):
-                                    for m in mistakes:
-                                        md_report += f"- {m}\n"
-                                else:
-                                    md_report += f"- {mistakes}\n"
-                                    
-                            md_report += f"\n**Σύσταση Μελέτης**: {report.get('Recommendation', '')}\n"
-                            
-                            for chunk in stream_text_chunks(md_report, chunk_size=8, delay=0.01):
-                                yield chunk
+                            try:
+                                # Evaluate the full transcript (history + the latest question)
+                                full_eval_history = history + [{"role": "user", "text": question}]
+                                report_json_str = generate_report_card(full_eval_history)
+                                import json
+                                report = json.loads(report_json_str)
                                 
-                        except Exception as e:
-                            print(f"[REPORT CARD ERROR] {e}")
-                            yield create_sse_event("token", f"\n[!] Σφάλμα κατά τη δημιουργία αξιολόγησης: {str(e)}")
+                                md_report = f"### 📋 Φύλλο Αξιολόγησης (Report Card)\n\n"
+                                md_report += f"| Τομέας Αξιολόγησης | Βαθμολογία |\n"
+                                md_report += f"| :--- | :--- |\n"
+                                md_report += f"| ⚖️ Νομική Γνώση | **{report.get('Legal_Knowledge', 'N/A')}/100** |\n"
+                                md_report += f"| ⚠️ Εκτίμηση Κινδύνου | **{report.get('Risk_Assessment', 'N/A')}/100** |\n"
+                                md_report += f"| 🧠 Λήψη Αποφάσεων | **{report.get('Decision_Making', 'N/A')}/100** |\n"
+                                md_report += f"| 🏆 **Συνολικός Βαθμός** | **{report.get('Overall_Grade', 'N/A')}/100** |\n\n"
+                                md_report += f"**Σύνοψη**: {report.get('Summary', '')}\n\n"
+                                
+                                mistakes = report.get('Key_Mistakes', [])
+                                if mistakes:
+                                    md_report += "**Βασικά Λάθη**:\n"
+                                    if isinstance(mistakes, list):
+                                        for m in mistakes:
+                                            md_report += f"- {m}\n"
+                                    else:
+                                        md_report += f"- {mistakes}\n"
+                                        
+                                md_report += f"\n**Σύσταση Μελέτης**: {report.get('Recommendation', '')}\n"
+                                
+                                for chunk in stream_text_chunks(md_report, chunk_size=8, delay=0.01):
+                                    yield chunk
+                                    
+                            except Exception as e:
+                                print(f"[REPORT CARD ERROR] {e}")
+                                yield create_sse_event("token", f"\n[!] Σφάλμα κατά τη δημιουργία αξιολόγησης: {str(e)}")
 
 
                 # ============ MIXED LEGAL DATA (Hybrid Diagnosis) ============

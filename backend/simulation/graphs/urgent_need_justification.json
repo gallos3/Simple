@@ -1,9 +1,15 @@
 {
   "scenario_id": "urgent_need_justification",
-  "version": "1.0.0",
-  "validation_status": "active",
-  "authoring_source_mode": "manual_expert",
   "title": "Urgency and Foreseeability Risk",
+  "validation_status": "active",
+  "review": {
+    "approval_status": "approved",
+    "review_date": "2026-06-27",
+    "review_notes": "Expert reviewed after expansion. Path length validated: minimum 4 decisions, maximum 6 decisions. Approved for runtime use."
+  },
+  "risk_pattern": "Unjustified urgency",
+  "source_basis": "Expert generated scenario",
+  "max_steps": 6,
   "learning_objectives": [
     "Distinguish genuine urgency from poor planning",
     "Document timeline and operational necessity",
@@ -14,29 +20,20 @@
     "Foreseeable recurring needs treated as urgent",
     "Lack of timeline documentation"
   ],
-  "source_basis": "Expert generated scenario",
-  "risk_pattern": "Unjustified urgency",
-  "review": {
-    "reviewed_by": "manual",
-    "review_date": "2026-06-26",
-    "review_notes": "Approved after expert review",
-    "approval_status": "approved"
-  },
   "start_node": "n1",
-  "max_steps": 6,
   "nodes": {
     "n1": {
-      "text": "A department requests an urgent procurement citing an immediate operational need, but the supplies are regularly consumed.",
-      "challenge": "How should you process this request?",
+      "text": "A department requests urgent handling for regularly consumed supplies, claiming an immediate operational need.",
+      "challenge": "How should you process this initial request?",
       "options": {
         "A": {
           "text": "Review the planning timeline to check if the need was foreseeable.",
           "next_node": "n2",
           "score_delta": 10,
           "time_delta": 1,
-          "audit_risk_delta": -2,
+          "audit_risk_delta": 0,
           "admin_burden_delta": 1,
-          "value_for_money_risk_delta": -1,
+          "value_for_money_risk_delta": 0,
           "feedback": "Good. Checking foreseeability establishes whether genuine urgency exists.",
           "expert_log": "Verified foreseeability timeline."
         },
@@ -44,101 +41,218 @@
           "text": "Process immediately as an urgent procedure to ensure continuity.",
           "next_node": "n3",
           "score_delta": -5,
-          "time_delta": -1,
+          "time_delta": 0,
           "audit_risk_delta": 3,
           "admin_burden_delta": 0,
           "value_for_money_risk_delta": 2,
-          "feedback": "Processing without review risks an audit finding for poor planning.",
+          "feedback": "Processing without review risks an audit concern for poor planning.",
           "expert_log": "Processed urgent request without verifying foreseeability."
         },
         "C": {
-          "text": "Reject the request and require standard procedure, halting operations.",
-          "next_node": "END",
+          "text": "Reject the request entirely without investigating, requiring standard procedure.",
+          "next_node": "n4",
           "score_delta": -10,
           "time_delta": 3,
-          "audit_risk_delta": -1,
+          "audit_risk_delta": 0,
           "admin_burden_delta": 2,
           "value_for_money_risk_delta": 3,
-          "feedback": "Halting operations entirely without investigating alternative coverage harms the public body.",
+          "feedback": "Rejecting without checking alternatives risks severe operational disruption.",
           "expert_log": "Halted operations rather than investigating bridge contracts."
         }
       }
     },
     "n2": {
-      "text": "The timeline shows the need was foreseeable, but failure to act will now cause severe operational disruption.",
-      "challenge": "How to proceed while minimizing risk?",
+      "text": "The timeline review shows the need was foreseeable, and the delay was an internal departmental issue.",
+      "challenge": "How to proceed given that the delay is internal but operations are at risk?",
       "options": {
         "A": {
-          "text": "Document the planning failure and escalate for a minimal bridging contract while launching standard procedure.",
-          "next_node": "END",
-          "score_delta": 20,
+          "text": "Document the internal delay and propose a limited interim coverage while a standard procedure runs.",
+          "next_node": "n5",
+          "score_delta": 15,
           "time_delta": 2,
-          "audit_risk_delta": -2,
+          "audit_risk_delta": 0,
           "admin_burden_delta": 2,
-          "value_for_money_risk_delta": -2,
-          "feedback": "Excellent. A bridging contract ensures continuity while minimizing audit risk.",
-          "expert_log": "Initiated bridging contract and documented planning failure."
+          "value_for_money_risk_delta": 0,
+          "feedback": "Excellent. Interim coverage ensures continuity while providing a defensible audit trail.",
+          "expert_log": "Proposed interim coverage with documented internal delay."
         },
         "B": {
-          "text": "Approve the full urgent procedure due to the severe disruption risk.",
-          "next_node": "END",
+          "text": "Escalate to management without documenting the specific timeline failure.",
+          "next_node": "n4",
+          "score_delta": -5,
+          "time_delta": 1,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Escalation without documentation creates a weak audit trail.",
+          "expert_log": "Escalated without timeline documentation."
+        },
+        "C": {
+          "text": "Accept the department's urgency memo as sufficient justification anyway.",
+          "next_node": "n3",
           "score_delta": -10,
           "time_delta": 0,
           "audit_risk_delta": 3,
-          "admin_burden_delta": 1,
+          "admin_burden_delta": 0,
           "value_for_money_risk_delta": 1,
-          "feedback": "Approving full urgency for foreseeable needs is a high audit risk.",
-          "expert_log": "Approved full urgent procedure despite foreseeability."
+          "feedback": "Accepting a weak justification for a foreseeable need increases audit concern.",
+          "expert_log": "Accepted weak justification despite foreseeability."
+        }
+      }
+    },
+    "n3": {
+      "text": "Operational continuity is now severely threatened if the supplies are not ordered immediately.",
+      "challenge": "How do you balance continuity against the procedural risks?",
+      "options": {
+        "A": {
+          "text": "Halt all operations and insist on full standard procedures, regardless of disruption.",
+          "next_node": "n4",
+          "score_delta": -10,
+          "time_delta": 3,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Refusing to find a pragmatic solution harms the organization's core operations.",
+          "expert_log": "Insisted on standard procedure, risking operations."
+        },
+        "B": {
+          "text": "Proceed with full urgent procedure for the entire annual volume.",
+          "next_node": "n5",
+          "score_delta": -15,
+          "time_delta": 0,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Using urgency for the full volume rather than just the gap period is a major audit concern.",
+          "expert_log": "Approved full volume under urgency."
         },
         "C": {
-          "text": "Request the department to alter the dates on their memo to hide the delay.",
-          "next_node": "END",
+          "text": "Strictly limit the procurement scope to what is necessary for immediate survival.",
+          "next_node": "n5",
+          "score_delta": 10,
+          "time_delta": 1,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Good. Limiting scope minimizes risk while addressing the immediate need.",
+          "expert_log": "Limited procurement scope to immediate needs only."
+        }
+      }
+    },
+    "n4": {
+      "text": "The situation requires careful internal escalation and documentation to resolve the impasse.",
+      "challenge": "How should this escalation and documentation be handled?",
+      "options": {
+        "A": {
+          "text": "Create a detailed timeline, attach all correspondence, and escalate formally.",
+          "next_node": "n5",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 0,
+          "feedback": "A complete and formal escalation provides a defensible audit trail.",
+          "expert_log": "Created detailed escalation file."
+        },
+        "B": {
+          "text": "Ask the requesting department to amend dates on their memos to hide the internal delay.",
+          "next_node": "n5",
           "score_delta": -30,
           "time_delta": 0,
           "audit_risk_delta": 5,
           "admin_burden_delta": 0,
           "value_for_money_risk_delta": 0,
-          "feedback": "Altering documents creates severe audit concern and requires further review.",
+          "feedback": "Altering documents creates a severe audit concern and breaks integrity.",
           "expert_log": "Advised altering internal documentation."
+        },
+        "C": {
+          "text": "Refuse to proceed and escalate to higher authority without proposing solutions.",
+          "next_node": "n5",
+          "score_delta": 0,
+          "time_delta": 3,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Escalating without proposing solutions causes delays and administrative frustration.",
+          "expert_log": "Escalated without offering pragmatic solutions."
         }
       }
     },
-    "n3": {
-      "text": "The urgent procedure is challenged by an auditor noting the supplies are regular consumables.",
-      "challenge": "How do you respond?",
+    "n5": {
+      "text": "A decision on interim coverage (bridging) is now required while the long-term solution is prepped.",
+      "challenge": "What is the best approach for the bridging measure?",
       "options": {
         "A": {
-          "text": "Provide a detailed justification linking the specific delayed delivery to unforeseeable external events.",
-          "next_node": "END",
-          "score_delta": 15,
+          "text": "Implement a narrowly scoped interim bridge just long enough to run standard procedures.",
+          "next_node": "n6",
+          "score_delta": 20,
           "time_delta": 2,
-          "audit_risk_delta": -2,
+          "audit_risk_delta": 0,
           "admin_burden_delta": 2,
           "value_for_money_risk_delta": 0,
-          "feedback": "Strong documentation of external unforeseeable factors mitigates risk.",
-          "expert_log": "Defended urgency with external unforeseeable event documentation."
+          "feedback": "Excellent. Narrow interim coverage balances continuity with procedural integrity.",
+          "expert_log": "Implemented narrowly scoped interim bridge."
         },
         "B": {
-          "text": "Argue that operational necessity overrides procedural requirements.",
-          "next_node": "END",
-          "score_delta": -15,
+          "text": "Expand the bridge contract to cover the full year to save time.",
+          "next_node": "n6",
+          "score_delta": -20,
           "time_delta": 0,
           "audit_risk_delta": 4,
           "admin_burden_delta": 1,
-          "value_for_money_risk_delta": 0,
-          "feedback": "Operational necessity alone does not justify circumventing standard procedures if foreseeable.",
-          "expert_log": "Used weak audit defensibility against audit finding."
+          "value_for_money_risk_delta": 3,
+          "feedback": "Expanding an interim measure to a full year undermines competition and raises audit flags.",
+          "expert_log": "Expanded interim bridge to full year improperly."
         },
         "C": {
-          "text": "Withdraw the award and cancel the procurement.",
+          "text": "Abandon interim coverage entirely and risk operational disruption until the standard process completes.",
+          "next_node": "n6",
+          "score_delta": -10,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 4,
+          "feedback": "Abandoning coverage harms operations and demonstrates poor risk management.",
+          "expert_log": "Abandoned interim coverage, risking disruption."
+        }
+      }
+    },
+    "n6": {
+      "text": "The immediate procurement gap is addressed. Now, focus turns to preventing recurrence.",
+      "challenge": "What final corrective action should be taken?",
+      "options": {
+        "A": {
+          "text": "Establish mandatory quarterly planning reviews with the department.",
+          "next_node": "END",
+          "score_delta": 20,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Proactive planning reviews are an excellent corrective action to prevent future urgency issues.",
+          "expert_log": "Established mandatory planning reviews."
+        },
+        "B": {
+          "text": "Close the case without taking any corrective action.",
           "next_node": "END",
           "score_delta": -10,
-          "time_delta": 3,
-          "audit_risk_delta": 1,
-          "admin_burden_delta": 3,
+          "time_delta": 0,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 0,
           "value_for_money_risk_delta": 2,
-          "feedback": "Canceling late causes disruption and administrative chaos.",
-          "expert_log": "Canceled procurement reactively after audit challenge."
+          "feedback": "Failing to implement corrective action ensures this problem will recur.",
+          "expert_log": "Closed case with no corrective action."
+        },
+        "C": {
+          "text": "Send a generic warning email to the department about submitting earlier.",
+          "next_node": "END",
+          "score_delta": 5,
+          "time_delta": 1,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "A warning is a minimal corrective action, but lacks structural impact.",
+          "expert_log": "Sent generic warning email regarding delays."
         }
       }
     }
