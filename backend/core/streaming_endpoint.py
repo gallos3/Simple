@@ -6,7 +6,7 @@ from datetime import datetime
 from utils.debug_logger import start_trace, update_trace
 from typing import Any, Dict, List, Optional, Union
 from data_access.query_matcher import get_query_match
-from flask import Flask, Response, request, stream_with_context, jsonify
+from flask import Flask, send_from_directory, Response, request, stream_with_context, jsonify
 from flask_cors import CORS
 
 # Imports from other modules
@@ -63,6 +63,8 @@ def create_sse_event(event_type: str, data: Any) -> str:
         payload["data"] = data
     elif event_type == "error":
         payload["content"] = str(data)
+    elif event_type == "download_report":
+        payload["data"] = data
     
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -78,6 +80,16 @@ def stream_text_chunks(text: str, chunk_size: int = 4, delay: float = 0.02):
 def add_streaming_routes(app: Flask):
     """Registers the ask_stream endpoint."""
     
+    reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    @app.route("/download_report/<path:filename>", methods=["GET"], endpoint="download_labyrinth_report")
+    def download_labyrinth_report(filename):
+        if not (filename.endswith(".md") or filename.endswith(".txt")):
+            from flask import jsonify
+            return jsonify({"error": "Invalid file type"}), 400
+        return send_from_directory(reports_dir, filename, as_attachment=True)
+
     @app.route("/ask_stream", methods=["POST", "OPTIONS"])
     def ask_stream():
         if request.method == "OPTIONS":
@@ -458,6 +470,35 @@ def add_streaming_routes(app: Flask):
                         full_answer_str += fallback_msg
                         yield create_sse_event("token", fallback_msg)
                         
+                    is_professional_labyrinth_final = (
+                        "[SIMULATION MODE]" in full_answer_str
+                        and "Professional Procurement Labyrinth" in full_answer_str
+                        and "[FINAL REPORT]" in full_answer_str
+                    )
+                    
+                    if is_professional_labyrinth_final and "Download Expert Review Report" not in full_answer_str:
+                        reports_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_reports")
+                        os.makedirs(reports_dir, exist_ok=True)
+                        
+                        match = re.search(r"\[SCENARIO_ID\]\s*([a-zA-Z0-9_]+)", full_answer_str)
+                        scenario_id = match.group(1) if match else "unknown"
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"labyrinth_report_{scenario_id}_{timestamp}.md"
+                        
+                        filepath_report = os.path.join(reports_dir, filename)
+                        with open(filepath_report, "w", encoding="utf-8") as rf:
+                            rf.write(full_answer_str)
+                            
+                        link_msg = f"\n\n📥 [Download Expert Review Report](/download_report/{filename})\n"
+                        # Only keep token if useful, but we emit structured event
+                        full_answer_str += link_msg
+                        yield create_sse_event("token", link_msg)
+                        yield create_sse_event("download_report", {
+                            "label": "Download Expert Review Report",
+                            "url": f"/download_report/{filename}",
+                            "filename": filename
+                        })
+
                     # ----------------------------------------------------
                     # REPORT CARD (Φύλλο Αξιολόγησης) στο τέλος του σεναρίου
                     # ----------------------------------------------------
@@ -466,12 +507,6 @@ def add_streaming_routes(app: Flask):
                     student_turns = _count_student_turns(history)
                     
                     if (not is_start) and (student_turns >= MAX_TURNS):
-                        is_professional_labyrinth_final = (
-                            "[SIMULATION MODE]" in full_answer_str
-                            and "Professional Procurement Labyrinth" in full_answer_str
-                            and "[FINAL REPORT]" in full_answer_str
-                        )
-                        
                         if is_professional_labyrinth_final:
                             print("[SIMULATION] Professional Labyrinth final report already generated; skipping legacy report card.", flush=True)
                         else:

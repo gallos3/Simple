@@ -225,6 +225,7 @@ export default function App() {
 
     let fullText = "";
     let buffer = ""; // Buffer for partial SSE messages
+    let downloadReportData = null; // Store download event payload
 
     try {
       console.log("[UI] Fetching /ask_stream...");
@@ -335,7 +336,9 @@ export default function App() {
                 console.log("[UI] End event received, fullText:", fullText);
                 const cleaned = ensureCompleteText(fullText);
                 if (cleaned) {
-                  addMessage("bot", cleaned);
+                  addMessage("bot", cleaned, {
+                    ...(downloadReportData && { download_report: downloadReportData })
+                  });
                   
                   // Final check for any remaining text in buffer that wasn't spoken
                   const lastIdx = window._lastSpokenIndex || 0;
@@ -347,6 +350,9 @@ export default function App() {
                 setStreamingText("");
                 fullText = "";
                 window._lastSpokenIndex = 0;
+              } else if (data.type === "download_report") {
+                console.log("[UI] Download report event:", data.data || data);
+                downloadReportData = data.data || data;
               } else if (data.type === "error") {
                 console.error("[UI] Error from server:", data.content);
                 addMessage("bot", `⚠️ ${data.content}`);
@@ -364,7 +370,9 @@ export default function App() {
         console.log("[UI] Handling remaining text after stream end");
         const cleaned = ensureCompleteText(fullText);
         if (cleaned) {
-          addMessage("bot", cleaned);
+          addMessage("bot", cleaned, {
+            ...(downloadReportData && { download_report: downloadReportData })
+          });
           speak(cleaned);
         }
       }
@@ -712,6 +720,19 @@ export default function App() {
               </button>
             )}
             
+            {/* Download Report Button */}
+            {m.download_report && (
+              <a
+                href={m.download_report.url.startsWith("http") ? m.download_report.url : `http://localhost:5051${m.download_report.url}`}
+                download={m.download_report.filename || "report.md"}
+                className="mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-bold flex w-fit items-center gap-2 transition-colors no-underline shadow-md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                📥 {m.download_report.label || "Download Expert Review Report"}
+              </a>
+            )}
+
             {/* Follow-up suggestion buttons */}
             {m.suggestions && m.suggestions.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">

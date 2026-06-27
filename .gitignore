@@ -95,3 +95,5 @@ backend/scratch/
 # Neo4j / Local DBs
 neo4j_data/
 logs/
+backend/generated_reports/
+*.bak
