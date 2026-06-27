@@ -126,7 +126,53 @@ def add_streaming_routes(app: Flask):
         # === ROUTE-LEVEL INSTRUCTOR GRAPH PREVIEW INTERCEPTOR ===
         q_norm_early = normalize_greek(question)
         q_clean_preview = question.strip().lower()
-        
+        # === SCENARIO CATALOG SLASH COMMAND ===
+        if q_clean_preview in ("/scenarios", "/scenario-list"):
+            def stream_scenario_catalog():
+                yield create_sse_event("start", {"intent": "instructor_scenario_catalog"})
+                
+                import os, json, glob
+                graphs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "simulation", "graphs")
+                
+                active_scenarios = []
+                draft_scenarios = []
+                
+                for path in glob.glob(os.path.join(graphs_dir, "*.json")):
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            
+                        sid = data.get("scenario_id", os.path.basename(path).replace(".json", ""))
+                        title = data.get("title", "Unknown Title")
+                        risk = data.get("risk_pattern", "Unknown Risk Pattern")
+                        
+                        val_stat = data.get("validation_status", "draft")
+                        rev_stat = data.get("review", {}).get("approval_status", "pending")
+                        
+                        entry = f"- {sid}\n  Title: {title}\n  Risk pattern: {risk}\n  Open graph:\n  /graph {sid}\n\n"
+                        
+                        if val_stat == "active" and rev_stat == "approved":
+                            active_scenarios.append(entry)
+                        else:
+                            draft_scenarios.append(entry)
+                    except Exception:
+                        pass
+                
+                msg = "[INSTRUCTOR SCENARIO CATALOG]\n\n"
+                msg += "[ACTIVE / PLAYABLE]\n"
+                msg += "".join(active_scenarios) if active_scenarios else "None\n\n"
+                msg += "[DRAFT / NEEDS REVIEW]\n"
+                msg += "".join(draft_scenarios) if draft_scenarios else "None\n\n"
+                msg += "[NOTE]\nOnly active/approved scenarios are playable by learners.\nDraft scenarios can be reviewed visually but are not playable until approved."
+                
+                yield from stream_text_chunks(msg, chunk_size=8, delay=0.01)
+                yield create_sse_event("end", {})
+
+            return Response(
+                stream_with_context(stream_scenario_catalog()),
+                mimetype="text/event-stream"
+            )
+
         # === SLASH COMMAND INSTRUCTOR GRAPH PREVIEW ===
         if q_clean_preview.startswith("/graph ") or q_clean_preview.startswith("/preview "):
             cmd_parts = q_clean_preview.split(" ", 1)
