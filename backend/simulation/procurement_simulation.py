@@ -884,19 +884,19 @@ def extract_choice(user_text: str):
     choice_map = {
         "a": "A", "α": "A",
         "b": "B", "β": "B",
-        "c": "C", "γ": "C"
+        "c": "C", "γ": "C", "ψ": "C", "Ψ": "C"
     }
     
     # Direct match mapping
     if text in choice_map:
         return choice_map[text]
         
-    match = re.search(r'\b(?:option|επιλογή|διάλεξα|choose|select)\s+([abcαβγ])\b', text)
+    match = re.search(r'\b(?:option|επιλογή|διάλεξα|choose|select)\s+([abcαβγψ])\b', text)
     if match:
         found = match.group(1).lower()
         return choice_map.get(found)
         
-    match = re.search(r'^([abcαβγ])\b', text)
+    match = re.search(r'^([abcαβγψ])\b', text)
     if match:
         found = match.group(1).lower()
         return choice_map.get(found)

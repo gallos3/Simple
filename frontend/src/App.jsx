@@ -733,6 +733,11 @@ export default function App() {
               </a>
             )}
 
+            {/* 
+              Scenario graph preview is instructor-only and must not be shown during learner gameplay.
+              Instructors can manually access http://localhost:5051/graph_preview/<scenario_id>.html
+            */}
+
             {/* Follow-up suggestion buttons */}
             {m.suggestions && m.suggestions.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">

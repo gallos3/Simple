@@ -90,6 +90,20 @@ def add_streaming_routes(app: Flask):
             return jsonify({"error": "Invalid file type"}), 400
         return send_from_directory(reports_dir, filename, as_attachment=True)
 
+    previews_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_graph_previews")
+    os.makedirs(previews_dir, exist_ok=True)
+
+    @app.route("/graph_preview/<path:filename>", methods=["GET"], endpoint="graph_preview_html")
+    def graph_preview_html(filename):
+        if not filename.endswith(".html"):
+            from flask import jsonify
+            return jsonify({"error": "Invalid file type"}), 400
+        preview_path = os.path.join(previews_dir, filename)
+        if not os.path.exists(preview_path):
+            from flask import jsonify
+            return jsonify({"error": "Preview not generated"}), 404
+        return send_from_directory(previews_dir, filename)
+
     @app.route("/ask_stream", methods=["POST", "OPTIONS"])
     def ask_stream():
         if request.method == "OPTIONS":
@@ -289,16 +303,23 @@ def add_streaming_routes(app: Flask):
             intent = detect_intent(question, history)
 
             # Auto-exit simulation on intent change
-            is_in_simulation = any(
-                "SCENARIO" in msg.get("text", "") or "[SIMULATION MODE]" in msg.get("text", "")
-                for msg in history if msg.get("role") in ("assistant", "bot")
-            )
+            def history_has_active_labyrinth(hist) -> bool:
+                for msg in reversed(hist):
+                    if msg.get("role") in ("assistant", "bot"):
+                        txt = msg.get("text", "") or msg.get("content", "") or msg.get("message", "")
+                        if "Professional Procurement Labyrinth" in txt and "[SCENARIO_ID]" in txt and "[CURRENT_NODE]" in txt:
+                            if "[FINAL REPORT]" not in txt:
+                                return True
+                return False
+
+            is_in_simulation = history_has_active_labyrinth(history)
 
             if is_in_simulation:
                 q_clean = question.strip().lower()
-                is_choice = q_clean in ['a', 'b', 'c', 'α', 'β', 'γ', 'next'] or re.match(r'^(option|επιλογή|διάλεξα|choose|select)\s+[abcαβγ]$', q_clean, re.IGNORECASE)
+                is_choice = q_clean in ['a', 'b', 'c', 'α', 'β', 'γ', 'ψ', 'next'] or re.match(r'^(option|επιλογή|διάλεξα|choose|select)\s+[abcαβγψ]$', q_clean, re.IGNORECASE)
                 if is_choice:
                     intent = "procurement_simulation"
+                    print("[SIMULATION ROUTER] Active labyrinth choice detected; forcing procurement_simulation intent.", flush=True)
                 else:
                     isolated_intent = detect_intent(question, [])
                     if isolated_intent != "procurement_simulation":
