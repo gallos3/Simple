@@ -2,8 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
 
 # Distribution / packaging
@@ -28,36 +26,75 @@ MANIFEST
 
 # Environments
 .env
+*.env
 .venv
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
 
-# Project specific
-backend/models/
-backend/data/
-backend/exports/
-backend/reports/
-backend/legal_embeddings.npy
-backend/entity_cache.json
+# Secrets
 backend/config.json
+
+# Large raw datasets
+backend/data/
+backend/entity_cache.json
+backend/entity_cache.index.pkl
+backend/legal_corpus.jsonl
+backend/legal_embeddings.npy
+backend/NUTS2021.xlsx
+backend/*.npy
+
+# Runtime cache
 backend/cag_cache_data.json
-backend/scratch/
-backend/*.pkl
+backend/cag_cache_embs.npy
+
+# ML models
 backend/local_model/
-frontend/node_modules/
+*.gguf
+*.safetensors
 models/
 
-*.gguf
-*.npy
-*.jsonl
+# Generated outputs
+backend/reports/
+backend/exports/
+backend/logs/
+backend/debug_reports/
+
+# Legacy/upload/runtime folders
+
+
+# Reference material kept outside Git
+backend/papers/
+backend/legal_pdfs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Bloat / scratch
+structure.txt
+backend/scratch/
+
+# Generic ignored extensions
 *.pdf
 *.docx
+*.jsonl
+
+# Required tracked templates
+!backend/templates/
+!backend/templates/report_template.docx
+!backend/templates/hitl_dashboard.html
+
+# IDEs
 .idea/
 .vscode/
 
 # Neo4j / Local DBs
 neo4j_data/
 logs/
+backend/generated_reports/
+*.bak
+backend/generated_graph_previews/

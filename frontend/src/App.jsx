@@ -71,23 +71,7 @@ export default function App() {
     }
   }, []);
   
-  const hasGreeted = useRef(false);
-  // Initial Greeting
-  useEffect(() => {
-    if (!hasGreeted.current && messages.length === 0) {
-      hasGreeted.current = true;
-      const hour = new Date().getHours();
-      let greet = "Καλημέρα";
-      if (hour >= 12 && hour < 18) greet = "Καλησπέρα";
-      if (hour >= 18) greet = "Καλησπέρα";
-      
-      const welcome = userName 
-        ? `😊 Hello ${userName}! I am Simple. How can I help you with your audits today?`
-        : `😊 Hello! I am Simple, your public procurement assistant. How can I help you today?`;
-        
-      addMessage("bot", welcome);
-    }
-  }, []);
+
 
   // Global push-to-talk: κρατάω πατημένο το αριστερό κλικ οπουδήποτε
   useEffect(() => {
@@ -241,6 +225,8 @@ export default function App() {
 
     let fullText = "";
     let buffer = ""; // Buffer for partial SSE messages
+    let downloadReportData = null; // Store download event payload
+    let graphPreviewData = null; // Store graph preview payload
 
     try {
       console.log("[UI] Fetching /ask_stream...");
@@ -351,7 +337,10 @@ export default function App() {
                 console.log("[UI] End event received, fullText:", fullText);
                 const cleaned = ensureCompleteText(fullText);
                 if (cleaned) {
-                  addMessage("bot", cleaned);
+                  addMessage("bot", cleaned, {
+                    ...(downloadReportData && { download_report: downloadReportData }),
+                    ...(graphPreviewData && { graph_preview: graphPreviewData })
+                  });
                   
                   // Final check for any remaining text in buffer that wasn't spoken
                   const lastIdx = window._lastSpokenIndex || 0;
@@ -363,6 +352,12 @@ export default function App() {
                 setStreamingText("");
                 fullText = "";
                 window._lastSpokenIndex = 0;
+              } else if (data.type === "download_report") {
+                console.log("[UI] Download report event:", data.data || data);
+                downloadReportData = data.data || data;
+              } else if (data.type === "graph_preview") {
+                console.log("[UI] Graph preview event:", data.data || data);
+                graphPreviewData = data.data || data;
               } else if (data.type === "error") {
                 console.error("[UI] Error from server:", data.content);
                 addMessage("bot", `⚠️ ${data.content}`);
@@ -380,7 +375,10 @@ export default function App() {
         console.log("[UI] Handling remaining text after stream end");
         const cleaned = ensureCompleteText(fullText);
         if (cleaned) {
-          addMessage("bot", cleaned);
+          addMessage("bot", cleaned, {
+            ...(downloadReportData && { download_report: downloadReportData }),
+            ...(graphPreviewData && { graph_preview: graphPreviewData })
+          });
           speak(cleaned);
         }
       }
@@ -728,6 +726,36 @@ export default function App() {
               </button>
             )}
             
+            {/* Download Report Button */}
+            {m.download_report && (
+              <a
+                href={m.download_report.url.startsWith("http") ? m.download_report.url : `http://localhost:5051${m.download_report.url}`}
+                download={m.download_report.filename || "report.md"}
+                className="mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm text-white font-bold flex w-fit items-center gap-2 transition-colors no-underline shadow-md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                📥 {m.download_report.label || "Download Expert Review Report"}
+              </a>
+            )}
+
+            {/* View Instructor Graph Preview Button */}
+            {m.graph_preview && (
+              <a
+                href={m.graph_preview.url.startsWith("http") ? m.graph_preview.url : `http://localhost:5051${m.graph_preview.url}`}
+                className="mt-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm text-white font-bold flex w-fit items-center gap-2 transition-colors no-underline shadow-md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                🕸️ {m.graph_preview.label || "Open Instructor Graph Preview"}
+              </a>
+            )}
+
+            {/* 
+              Scenario graph preview is instructor-only and must not be shown during learner gameplay.
+              Instructors can manually access http://localhost:5051/graph_preview/<scenario_id>.html
+            */}
+
             {/* Follow-up suggestion buttons */}
             {m.suggestions && m.suggestions.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">

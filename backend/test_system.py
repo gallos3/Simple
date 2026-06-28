@@ -3,8 +3,9 @@ import sys
 import os
 from pathlib import Path
 
-# Add current dir to path
+# Add current dir and core dir to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "core"))
 
 from llm_interface import call_llm
 from legal_rag import search_legal_corpus

@@ -7,7 +7,7 @@ echo ============================================
 echo.
 
 echo [1/3] Starting Backend (Flask API - port 5051)...
-start cmd /k "chcp 65001 >nul && set PYTHONIOENCODING=utf-8 && cd /d %~dp0backend && python server.py"
+start cmd /k "chcp 65001 >nul && set PYTHONIOENCODING=utf-8 && cd /d %~dp0backend && python -m core.server"
 
 timeout /t 3 >nul
 

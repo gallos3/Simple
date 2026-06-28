@@ -1,0 +1,265 @@
+{
+  "scenario_id": "direct_award_fragmentation",
+  "version": "1.0.0",
+  "validation_status": "active",
+  "authoring_source_mode": "manual_expert",
+  "title": "Fragmentation / repeated low-value purchase risk pattern",
+  "source_basis": "",
+  "learning_objectives": [
+    "Identify artificial fragmentation indicators",
+    "Apply estimated-value reasoning to similar needs",
+    "Assess documentation gaps and audit-trail quality",
+    "Evaluate when internal verification or escalation is needed"
+  ],
+  "red_flags": [
+    "Similar needs framed as isolated low-value purchases",
+    "Multiple units requesting related supplies in the same period",
+    "Repeated supplier-family pattern",
+    "Separate market research memos used instead of combined review",
+    "Post-facto justification after risk indicators appear"
+  ],
+  "review": {
+    "reviewed_by": "manual",
+    "review_date": "2026-06-26",
+    "review_notes": "Initial validated graph",
+    "approval_status": "approved"
+  },
+  "start_node": "n1",
+  "max_steps": 6,
+  "nodes": {
+    "n1": {
+      "text": "A hospital department has several similar supply needs during the same financial year. Different units propose separate low-value purchases from the same supplier family.",
+      "challenge": "Which option best addresses the fragmentation risk and creates the strongest audit trail without causing undue operational delays?",
+      "options": {
+        "A": {
+          "text": "Proceed with separate purchases immediately but document the urgent need.",
+          "next_node": "n2",
+          "score_delta": -10,
+          "time_delta": 0,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Option A is fast, but it treats similar needs as isolated requests. This may weaken estimated-value reasoning and create a weak audit trail.",
+          "expert_log": "Chose isolated requests over consolidation. Increased audit risk."
+        },
+        "B": {
+          "text": "Consolidate the requests to assess the total estimated value before proceeding.",
+          "next_node": "n3",
+          "score_delta": 10,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Option B is the strongest response. It consolidates similar needs for review, supports estimated-value reasoning, and creates a clearer audit trail before any award decision.",
+          "expert_log": "Chose consolidation. Strong audit trail."
+        },
+        "C": {
+          "text": "Ask each unit to provide a separate market research memo, then process them individually.",
+          "next_node": "n2",
+          "score_delta": 0,
+          "time_delta": 1,
+          "audit_risk_delta": 1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Option C improves documentation at unit level, but separate memos do not fully address the fragmentation risk if the needs are similar and should be examined together.",
+          "expert_log": "Chose separate memos. Marginal documentation improvement but fragmentation risk remains."
+        }
+      }
+    },
+    "n2": {
+      "text": "The separate purchases proceed, but internal tracking flags that the combined volume of these isolated requests may exceed the scope suitable for isolated handling.",
+      "challenge": "How do you rectify the audit finding?",
+      "options": {
+        "A": {
+          "text": "Argue the needs were unforeseeable to justify the isolated handling.",
+          "next_node": "n6",
+          "score_delta": -15,
+          "time_delta": 1,
+          "audit_risk_delta": 3,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Arguing unforeseeability post-facto for routine supplies creates a severe audit vulnerability.",
+          "expert_log": "Attempted to use unforeseeability incorrectly."
+        },
+        "B": {
+          "text": "Consolidate the remaining needs to assess their total scope.",
+          "next_node": "n3",
+          "score_delta": 10,
+          "time_delta": 2,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Consolidating remaining needs shows corrective action and mitigates further risk.",
+          "expert_log": "Corrective consolidation applied."
+        },
+        "C": {
+          "text": "Cancel all remaining requests to avoid further exposure.",
+          "next_node": "END",
+          "score_delta": -20,
+          "time_delta": 0,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Canceling operational needs entirely harms the hospital's core mission.",
+          "expert_log": "Operational risk induced to avoid audit tracking."
+        }
+      }
+    },
+    "n3": {
+      "text": "The consolidated estimated value is calculated and confirms it requires broader review beyond standard low-value workflows.",
+      "challenge": "What is the most appropriate next step?",
+      "options": {
+        "A": {
+          "text": "Escalate the request for a more structured supplier comparison route.",
+          "next_node": "n5",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -2,
+          "feedback": "Escalating for a structured supplier comparison is the proper action for aggregated values.",
+          "expert_log": "Correct escalation for structured comparison initiated."
+        },
+        "B": {
+          "text": "Split the value between two different financial years to avoid broader review.",
+          "next_node": "n6",
+          "score_delta": -25,
+          "time_delta": 1,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 2,
+          "feedback": "Splitting across financial years to evade broader review is a classic fragmentation indicator and severely increases audit risk.",
+          "expert_log": "Attempted deliberate fragmentation across financial years."
+        },
+        "C": {
+          "text": "Seek expanded market research to justify the combined value.",
+          "next_node": "n4",
+          "score_delta": 10,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Seeking expanded market research supports value-for-money reasoning and a clearer evidence trail.",
+          "expert_log": "Expanded market research initiated."
+        }
+      }
+    },
+    "n4": {
+      "text": "Market research suggests only two suitable suppliers are immediately available for the consolidated volume.",
+      "challenge": "How do you handle the limited supplier availability?",
+      "options": {
+        "A": {
+          "text": "Proceed with comparing only the two identified suppliers to save time.",
+          "next_node": "END",
+          "score_delta": -5,
+          "time_delta": 1,
+          "audit_risk_delta": 1,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Comparing only two suppliers offers minimal assurance of value-for-money, but may be acceptable if thoroughly justified.",
+          "expert_log": "Proceeded with minimum comparison. Marginal value-for-money risk."
+        },
+        "B": {
+          "text": "Expand the search or escalate for a broader review.",
+          "next_node": "n5",
+          "score_delta": 10,
+          "time_delta": 2,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Expanding the search supports strong transparency safeguards and value-for-money.",
+          "expert_log": "Pushed for broader market access."
+        },
+        "C": {
+          "text": "Ask the suppliers directly to lower prices based on the larger volume.",
+          "next_node": "n6",
+          "score_delta": -15,
+          "time_delta": 1,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 0,
+          "feedback": "Informal price negotiation without a structured comparison process creates probity and transparency risks.",
+          "expert_log": "Engaged in unstructured informal negotiation."
+        }
+      }
+    },
+    "n5": {
+      "text": "The internal review team suggests internal verification against applicable rules before finalizing the structured comparison.",
+      "challenge": "How should the procurement team respond?",
+      "options": {
+        "A": {
+          "text": "Support internal verification against applicable rules and ensure documentation is complete.",
+          "next_node": "END",
+          "score_delta": 15,
+          "time_delta": 2,
+          "audit_risk_delta": -2,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Supporting verification ensures a highly defensible audit trail and minimal risk.",
+          "expert_log": "Supported internal verification. Strong audit defensibility."
+        },
+        "B": {
+          "text": "Push back on the review to prioritize operational speed.",
+          "next_node": "END",
+          "score_delta": -10,
+          "time_delta": -1,
+          "audit_risk_delta": 2,
+          "admin_burden_delta": 0,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Bypassing internal review prioritizes speed but increases exposure to audit findings.",
+          "expert_log": "Bypassed internal review for speed."
+        },
+        "C": {
+          "text": "Delegate the review back to the requesting units.",
+          "next_node": "n6",
+          "score_delta": -10,
+          "time_delta": 2,
+          "audit_risk_delta": 1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": 1,
+          "feedback": "Delegating centralized review back to the units creates circular delays and weakens oversight.",
+          "expert_log": "Delegated oversight responsibilities incorrectly."
+        }
+      }
+    },
+    "n6": {
+      "text": "Severe risk indicators are present: administrative burden is rising, and the audit trail lacks a cohesive justification.",
+      "challenge": "What is the final corrective action?",
+      "options": {
+        "A": {
+          "text": "Stop the current approach and redesign the request centrally.",
+          "next_node": "END",
+          "score_delta": 10,
+          "time_delta": 3,
+          "audit_risk_delta": -1,
+          "admin_burden_delta": 2,
+          "value_for_money_risk_delta": -1,
+          "feedback": "Redesigning centrally is costly in time but effectively mitigates severe audit risk.",
+          "expert_log": "Halted process for central redesign. High time cost, safe audit."
+        },
+        "B": {
+          "text": "Justify past actions in a single overarching memo and proceed.",
+          "next_node": "END",
+          "score_delta": -20,
+          "time_delta": 1,
+          "audit_risk_delta": 4,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 2,
+          "feedback": "A single memo cannot retroactively cure systemic fragmentation or transparency flaws.",
+          "expert_log": "Relied on weak post-facto memo justification."
+        },
+        "C": {
+          "text": "Accept operational delay and postpone the needs until the next planning cycle.",
+          "next_node": "END",
+          "score_delta": -5,
+          "time_delta": 2,
+          "audit_risk_delta": 0,
+          "admin_burden_delta": 1,
+          "value_for_money_risk_delta": 3,
+          "feedback": "Postponing resolves the audit risk but represents a failure to meet operational needs.",
+          "expert_log": "Accepted operational failure to avoid audit risk."
+        }
+      }
+    }
+  }
+}
