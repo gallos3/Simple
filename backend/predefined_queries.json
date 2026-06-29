@@ -122,7 +122,7 @@
       "πόσες συμβάσεις έγιναν",
       "πόσες συμβάσεις έχω"
     ],
-    "query": "MATCH (c:Award) WHERE trim(toString(c.submission_date)) STARTS WITH  RETURN count(c) AS συμβάσεις",
+    "query": "MATCH (c:Award) WHERE trim(toString(c.submission_date)) STARTS WITH $year RETURN count(c) AS συμβάσεις",
     "needs_year": true
   },
   {

@@ -1322,8 +1322,10 @@ def _execute_matched_query(
 
         # Εξαγωγή noun phrase
         noun_phrase = None
-        if isinstance(description, str) and description.startswith("πόσες "):
-            rest = description[len("πόσες "):]
+        # Safety: if description contains unresolved template placeholders, ignore it entirely
+        _desc_safe = (description or "") if "{" not in (description or "") else ""
+        if isinstance(_desc_safe, str) and _desc_safe.startswith("πόσες "):
+            rest = _desc_safe[len("πόσες "):]
             rest = rest.split(" έχω")[0]
             noun_phrase = rest.strip(" ;?")
         
@@ -1333,9 +1335,18 @@ def _execute_matched_query(
                 noun_phrase = "απευθείας αναθέσεις"
             elif "συμβάσ" in ql or "συμβα" in ql:
                 noun_phrase = "συμβάσεις"
+            elif "εταιρ" in ql:
+                noun_phrase = "εταιρείες"
+            elif "αναθετουσ" in ql or "αναθέτουσ" in ql or "αρχε" in ql:
+                noun_phrase = "αναθέτουσες αρχές"
             else:
+                # Derive from the DB column name — always safe, never has placeholders
                 key = next(iter(row.keys()))
                 noun_phrase = str(key).replace("_", " ")
+        
+        # Final safety net: strip any surviving curly-brace placeholders from noun_phrase
+        import re as _re
+        noun_phrase = _re.sub(r"\{[^}]+\}", "", noun_phrase).strip()
         
         #  Χρήση άρθρου από την ερώτηση του χρήστη
         if entity and authority_name:
@@ -1362,8 +1373,9 @@ def _execute_matched_query(
         else:
             answer = f"{value}"
 
-        # Τελικό grammar check
+        # Τελικό grammar check + final placeholder scrub
         answer = answer.replace("συμβάσσεις", "συμβάσεις")
+        answer = _re.sub(r"\{[^}]+\}", "", answer).strip()
         
         print(f"    Simple count answer: {answer}")
         return answer
