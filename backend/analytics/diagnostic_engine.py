@@ -2,18 +2,26 @@
 Simple - Diagnostic Engine (Fountoukidis Methodology)
 -------------------------------------------------------
 Implements diagnostic metrics for procurement auditing based on:
-  - Fountoukidis et al. (2022) "Competitive conditions in the public
-    procurement markets: an investigation with network analysis"
-  - Fountoukidis et al. (2024) "Measuring Institutional Closure in
-    Public Procurement: Evidence from European Buyer–Supplier Networks"
+  - Foundoukidis, I. G., Antoniou, I., & Varsakelis, N. (2023). Competitive conditions in the public procurement markets: An investigation with network analysis.
+   Journal of Industrial and Business Economics, 50, 347–368. https://doi.org/10.1007/s40812-022-00251-z
+  - Foundoukidis, I. G., Antoniou, I., & Varsakelis, N. (2025). Network analysis for detecting domestic preferences in EU public procurement:
+   Enhancing market transparency and competitiveness. International Journal of Public Sector Management. https://doi.org/10.1108/ijpsm-03-2024-0075 
+  - Fountoukidis, I., Dafli, E., Antoniou, I., & Varsakelis, N. (2026). Measuring institutional closure in public procurement: A network-based index 
+  from European buyer–supplier data (p. 52). SSRN. https://ssrn.com/abstract=6765160
+  - Foundoukidis, I. G., Dafli, E. L., Antoniou, I. E., & Varsakelis, N. C. (2026). Recurrence as a governance signal: Diagnostic network metrics 
+  (LSE Research Online Documents on Economics No. 138494). London School of Economics and Political Science. https://www.lse.ac.uk/asset-library/information/greese-no219.pdf
+  - Fountoukidis, I., Antoniou, I., & Varsakelis, N. (2026). Many suppliers win, few capture the value: Participation and value concentration in EU public procurement.
+  Available at SSRN: https://ssrn.com/abstract=6897598 or http://dx.doi.org/10.2139/ssrn.6897598
 
-Metrics implemented:
+  
+  Metrics implemented:
   1. HHI  - Herfindahl-Hirschman Index (Market Concentration)
   2. H(X) - Network Entropy from Buyers' side
   3. H(Y) - Network Entropy from Sellers' (Winners') side
   4. H(Y|X) - Conditional Entropy: avg. seller distribution per buyer
   5. H(X|Y) - Conditional Entropy: avg. buyer distribution per seller
   6. ICI  - Institutional Closure Index (HHI × Relational Score)
+  7. VCD – Value–Count Divergence (\(\rho_{VCD} = 1 - \rho\) & \(\Delta G = Gini_{value} - Gini_{count}\))
 """
 
 import math
@@ -153,7 +161,7 @@ def calculate_authority_diagnostics(authority_name: str, year: str = "2024", cpv
 
 # =============================================================================
 # 2. NETWORK ENTROPY  H(X) and H(Y)
-#    Based on Fountoukidis et al. (2022), Equations (5) and (6)
+#    Based on Fountoukidis et al. (2023), Equations (5) and (6)
 # =============================================================================
 
 def calculate_network_entropy(year: str = "2024", cpv_domain: str = None) -> Dict[str, Any]:
@@ -223,7 +231,7 @@ def calculate_network_entropy(year: str = "2024", cpv_domain: str = None) -> Dic
 
 # =============================================================================
 # 3. CONDITIONAL NETWORK ENTROPY  H(Y|X) and H(X|Y)
-#    Based on Fountoukidis et al. (2022), Equations (7) and (8)
+#    Based on Fountoukidis et al. (2023), Equations (7) and (8)
 # =============================================================================
 
 def calculate_conditional_entropy(year: str = "2024", cpv_domain: str = None) -> Dict[str, Any]:
@@ -293,7 +301,7 @@ def calculate_conditional_entropy(year: str = "2024", cpv_domain: str = None) ->
 
 # =============================================================================
 # 4. INSTITUTIONAL CLOSURE INDEX (ICI)
-#    Based on Fountoukidis et al. (2024)
+#    Based on Fountoukidis et al. (2026)
 #    ICI_authority = HHI_authority × RelationalScore_authority
 #    RelationalScore = weighted avg over suppliers of:
 #       score(a,s) = (HF + AA) / (PA + epsilon)   normalized to [0,1]
@@ -453,8 +461,8 @@ def calculate_ici(authority_name: str, cpv_domain: str = None) -> Dict[str, Any]
 
 
 # =============================================================================
-# 5. VALUE CAPTURE DIVERGENCE (VCD)
-#    Based on Fountoukidis et al. — value_captor_predictor_v3.py
+# 5. VALUE CAPTURE DIVERGENCE (VCD) 
+#    Based on Fountoukidis et al. (2026) — value_captor_predictor_v3.py
 #    EXACT same logic as compute_vcd() / gini() from source.
 #    Measures divergence between contract COUNT ranking and VALUE ranking.
 # =============================================================================
@@ -598,7 +606,7 @@ def calculate_vcd(year: str = None, cpv_domain: str = None) -> Dict[str, Any]:
 
 # =============================================================================
 # 5b. RECURRENCE SIGNALS (Historical Frequency, Preferential Attachment, Adamic-Adar)
-#     Adapted from Fountoukidis et al. — predictor_khmdhs_hhi_fixed.py
+#     Adapted from Fountoukidis et al. (2026) — predictor_khmdhs_hhi_fixed.py
 #     Aggregates pair-level structural features to market-level signals.
 # =============================================================================
 

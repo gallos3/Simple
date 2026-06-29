@@ -87,7 +87,7 @@ def ingest_pdf_to_corpus(pdf_path: str | Path, corpus_path: Path | None = None) 
         print(f"[legal_ingest] ⚠️ Δεν βρέθηκε κείμενο στο PDF: {pdf_path.name}")
         return 0
 
-    base_id = pdf_path.stem  # π.χ. '4412_2016_FEK'
+    base_id = pdf_path.stem  
     source = pdf_path.stem
 
     written = 0
@@ -106,7 +106,6 @@ def ingest_pdf_to_corpus(pdf_path: str | Path, corpus_path: Path | None = None) 
 
 
 if __name__ == "__main__":
-    # Αν τρέξεις το script μόνο του, θα κάνει ingest ΟΛΑ τα PDF του φακέλου legal_pdfs
     print("[legal_ingest] Μαζική επεξεργασία όλων των PDF στον φάκελο legal_pdfs...")
     PDF_FOLDER.mkdir(exist_ok=True)
     total_chunks = 0

@@ -70,7 +70,6 @@ Final Answer: [Η τελική σου, εμπεριστατωμένη απάντ
                 scratchpad += f"\n{response}\n"
                 
                 if action in self.tools:
-                    print(f"\n[Agent Action] 🛠️ Calling {action}('{action_input}')")
                     try:
                         observation = self.tools[action].func(action_input)
                     except Exception as e:
@@ -78,7 +77,6 @@ Final Answer: [Η τελική σου, εμπεριστατωμένη απάντ
                 else:
                     observation = f"Το εργαλείο '{action}' δεν υπάρχει. Διαθέσιμα: {', '.join(self.tools.keys())}"
                 
-                print(f"[Agent Observation] 👁️ {str(observation)[:150]}...\n")
                 scratchpad += f"Observation: {observation}\n"
             else:
                 # Αν δεν ακολούθησε το format

@@ -77,6 +77,13 @@ frontend/dist/
 # Bloat / scratch
 structure.txt
 backend/scratch/
+backend/utils/check_cache.py
+backend/README.md
+backend/utils/check_legal_graph.py
+backend/utils/check_neo4j.py
+backend/test_api.py
+backend/tets_cypher.py
+backend/test_system.py
 
 # Generic ignored extensions
 *.pdf

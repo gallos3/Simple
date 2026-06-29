@@ -51,8 +51,8 @@ def build_corpus():
             text = extract_text_from_pdf(pdf_path)
             chunks = chunk_text(text, max_len=800)
 
-            base_id = pdf_path.stem  # π.χ. "4412_2016_FEK"
-            source = pdf_path.stem   # μπορείς να το κάνεις πιο φιλικό αν θέλεις
+            base_id = pdf_path.stem  
+            source = pdf_path.stem   
 
             for i, chunk in enumerate(chunks):
                 obj = {

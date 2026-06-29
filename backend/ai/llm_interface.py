@@ -7,7 +7,6 @@
 import json
 from typing import Optional, Generator, Any
 from llama_cpp import Llama
-
 from utils.config import MODEL_PATH
 
 # -----------------------------------------------------------
@@ -17,44 +16,40 @@ from utils.config import MODEL_PATH
 _llm_instance = None
 
 def get_llm() -> Llama:
-    """Lazy-load the LLM to prevent startup stdout conflicts with Flask/colorama"""
+    """Lazy-load the LLM"""
     global _llm_instance
     if _llm_instance is None:
-        print("[LLM] Initializing Llama-cpp (Lazy Load)...", flush=True)
         _llm_instance = Llama(
             model_path=MODEL_PATH,
             n_ctx=4096,
-            n_threads=6,      # Ryzen 5700U - 8 threads, κράτα 6 για το σύστημα
-            n_gpu_layers=0,   # Integrated GPU - όλα στη CPU
+            n_threads=6,
+            n_gpu_layers=0,
             verbose=False
         )
     return _llm_instance
 
 # -----------------------------------------------------------
-# HYBRID STRICT SYSTEM PROMPT
+# SYSTEM PROMPT
 # -----------------------------------------------------------
+
 HYBRID_SYSTEM_PROMPT = """Είσαι υβριδικός agent με δύο ιδιότητες:
+(Α) ΝΟΜΙΚΟΣ ΕΜΠΕΙΡΟΓΝΩΜΟΝΑΣ:
+- Δεν επινοείς νόμους ή στοιχεία
+- Αν δεν προκύπτει: «Δεν προκύπτει από διαθέσιμες πηγές»
 
-(Α) ΝΟΜΙΚΟΣ ΕΜΠΕΙΡΟΓΝΩΜΟΝΑΣ (ύφος ΣτΕ / ΕΑΑΔΗΣΥ):
-- Απολύτως ακριβής στα νομικά θέματα.
-- Δεν επινοείς νόμους, άρθρα, ΦΕΚ ή ημερομηνίες.
-- Αν κάτι δεν προκύπτει από επίσημες πηγές, δηλώνεις: «Δεν προκύπτει από διαθέσιμες πηγές».
+(Β) ΕΚΠΑΙΔΕΥΤΗΣ:
+- Δημιουργείς σενάρια μόνο όταν ζητηθεί
 
-(Β) ΕΚΠΑΙΔΕΥΤΗΣ / ΚΑΘΗΓΗΤΗΣ (για σενάρια προσομοίωσης):
-- Όταν ο χρήστης ζητά «σενάριο», «εκπαίδευση» ή «άσκηση», λειτουργείς ως Καθηγητής.
-- Σε αυτή την κατάσταση, ΔΗΜΙΟΥΡΓΕΙΣ ρεαλιστικά σενάρια βασισμένα στο νομικό πλαίσιο (Ν.4412/2016) για εκπαιδευτικούς σκοπούς.
-- Τα σενάρια πρέπει να είναι προκλητικά και να περιέχουν διλήμματα.
+ΓΕΝΙΚΑ:
+- Απαντάς σε σωστά ελληνικά
+"""
 
-ΓΕΝΙΚΟΙ ΚΑΝΟΝΕΣ:
-1. Μη δίνεις τη λύση αμέσως στα σενάρια. Ρώτα τον φοιτητή.
-2. Απαντάς πάντα σε άρτια ελληνικά.
-3. Όταν λείπουν δεδομένα για ΠΡΑΓΜΑΤΙΚΕΣ υποθέσεις λες «Απαιτείται διευκρίνιση»."""
-
-STOP_SEQUENCES = ["###", "Ερώτηση:", "ΑΠΑΝΤΗΣΗ:", "<|im_end|>"]
+STOP_SEQUENCES = ["###", "Ερώτηση:", "ΑΠΑΝΤΗΣΗ:", "<im_end>"]
 
 # -----------------------------------------------------------
-# ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΠΛΗΡΗ ΠΡΟΤΑΣΗ
+# HELPER
 # -----------------------------------------------------------
+
 def ensure_sentence(t: str) -> str:
     if not t:
         return t
@@ -64,65 +59,52 @@ def ensure_sentence(t: str) -> str:
     return t + '.'
 
 # -----------------------------------------------------------
-# ΒΑΣΙΚΗ ΚΛΗΣΗ LLM
+# CORE CALL
 # -----------------------------------------------------------
+
 def call_llm(prompt: str, max_tokens: int = 256, temperature: float = 0.0, system_prompt: str = None) -> str:
     try:
         sys_p = system_prompt or HYBRID_SYSTEM_PROMPT
-        full_prompt = f"<|im_start|>system\n{sys_p}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+
+        full_prompt = f"""<|im_start|>system
+{sys_p}
+<|im_end|>
+<|im_start|>user
+{prompt}
+<|im_end|>
+<|im_start|>assistant
+"""
+
         resp = get_llm()(
             full_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
             stop=STOP_SEQUENCES,
         )
+
         text = resp["choices"][0]["text"].strip()
         return ensure_sentence(text)
+
     except Exception as e:
         return f"[LLM Error: {e}]"
-
-def call_llm_json(prompt: str, max_tokens: int = 512, temperature: float = 0.1, system_prompt: str = None, retries: int = 3) -> str:
-    """
-    Calls the LLM and ensures the output is a valid JSON string.
-    Useful for scoring and structured reports.
-    """
-    sys_p = system_prompt if system_prompt else HYBRID_SYSTEM_PROMPT
-    sys_p += "\nIMPORTANT: You must return valid JSON only. No markdown formatting, no explanations."
-    
-    for attempt in range(retries):
-        try:
-            full_prompt = f"<|im_start|>system\n{sys_p}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
-            resp = get_llm()(
-                full_prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stop=STOP_SEQUENCES,
-            )
-            text = resp["choices"][0]["text"].strip()
-            
-            # Attempt to parse to ensure it's valid JSON
-            if "{" in text and "}" in text:
-                start = text.index("{")
-                end = text.rindex("}") + 1
-                json_str = text[start:end]
-                json.loads(json_str)  # Verify validity
-                return json_str
-            else:
-                raise ValueError("No JSON object found in output.")
-                
-        except Exception as e:
-            print(f"[LLM JSON Error - Attempt {attempt+1}/{retries}]: {e}")
-            if attempt == retries - 1:
-                return "{}"
-    return "{}"
 
 # -----------------------------------------------------------
 # STREAMING
 # -----------------------------------------------------------
+
 def stream_llm(prompt: str, max_tokens: int = 256, temperature: float = 0.0, system_prompt: str = None) -> Generator:
     try:
         sys_p = system_prompt or HYBRID_SYSTEM_PROMPT
-        full_prompt = f"<|im_start|>system\n{sys_p}<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+
+        full_prompt = f"""<|im_start|>system
+{sys_p}
+<|im_end|>
+<|im_start|>user
+{prompt}
+<|im_end|>
+<|im_start|>assistant
+"""
+
         stream = get_llm()(
             full_prompt,
             max_tokens=max_tokens,
@@ -130,96 +112,97 @@ def stream_llm(prompt: str, max_tokens: int = 256, temperature: float = 0.0, sys
             stop=STOP_SEQUENCES,
             stream=True
         )
+
         for chunk in stream:
             token = chunk["choices"][0]["text"]
             if token:
                 yield token
-        print("\n[LLM] Stream complete.", flush=True)
+
     except Exception as e:
-        print(f"\n[LLM] Streaming Error: {e}")
         yield f"[Streaming Error: {e}]"
 
 # -----------------------------------------------------------
-# SCHEMA ΓΙΑ CYPHER (διατηρείται για backwards compatibility)
+# SIMPLE HELPERS (fixed syntax only)
 # -----------------------------------------------------------
-SCHEMA = """
-Nodes:
-- Buyer(name)
-- Winner(name)
-- Award(id,title,value,submission_date,cpv_code)
-- NUTS(code,description)
 
-Rels:
-- (Buyer)-[:AWARDS]->(Award)-[:WON_BY]->(Winner)
-- (Award)-[:IN_REGION]->(NUTS)
-
-Note: CPV is stored directly on Award as: award.cpv_code
-"""
-
-# -----------------------------------------------------------
-# CYPHER GENERATION - ΔΕΝ ΧΡΗΣΙΜΟΠΟΙΕΙΤΑΙ (predefined queries)
-# Διατηρείται μόνο για backwards compatibility με engine.py
-# -----------------------------------------------------------
-def generate_cypher_query(question: str) -> str:
-    return ""   # Επιστρέφει κενό — το engine πέφτει στο fallback
-
-# -----------------------------------------------------------
-# LEGAL RAG RESPONSE
-# -----------------------------------------------------------
 def generate_legal_answer(question: str, passages: list) -> str:
     context = passages[0][:600] if passages else "(κανένα διαθέσιμο απόσπασμα)"
-    prompt = f"""Απάντησε ΜΟΝΟ βάσει του αποσπάσματος. Όχι επινοήσεις νόμων ή άρθρων.
+    prompt = f"""
+Απάντησε ΜΟΝΟ βάσει του αποσπάσματος.
 
 ΑΠΟΣΠΑΣΜΑ:
 {context}
 
 ΕΡΩΤΗΣΗ:
-{question}"""
+{question}
+"""
     return call_llm(prompt, 200)
 
-# -----------------------------------------------------------
-# SUMMARY
-# -----------------------------------------------------------
+
 def summarize_query_result(question: str, results: Any) -> str:
     if isinstance(results, str):
         return results
     if not results:
         return "Δεν βρέθηκαν αποτελέσματα."
 
-    subset = json.dumps(results[:5], ensure_ascii=False)
-    prompt = f"""Σύνθεση 1–2 προτάσεων, καθαρή και διοικητική.
+    prompt = f"""
+Ερώτηση:
+{question}
 
-Ερώτηση: {question}
-Δεδομένα: {subset}"""
+Δεδομένα:
+{results}
+"""
     return call_llm(prompt, 150)
 
-# -----------------------------------------------------------
-# GENERAL Q/A
-# -----------------------------------------------------------
+
 def answer_general_question(question: str) -> str:
-    prompt = f"Ερώτηση: {question}\n\nΑπάντηση (χωρίς επινοήσεις):"
-    system_prompt = "Είσαι βοηθός για τις δημόσιες συμβάσεις. Απάντησε με ακρίβεια και συντομία. Δεν επινοείς δεδομένα."
+    prompt = f"""
+Ερώτηση:
+{question}
+
+Απάντηση (χωρίς επινοήσεις):
+"""
+    system_prompt = "Απάντησε με ακρίβεια και χωρίς επινοήσεις."
     return call_llm(prompt, 200, system_prompt=system_prompt)
 
+
 def answer_general_question_stream(question: str) -> Generator:
-    system_prompt = "Είσαι βοηθός για τις δημόσιες συμβάσεις. Απάντησε με ακρίβεια και συντομία. Δεν επινοείς δεδομένα."
-    return stream_llm(f"Απάντησε χωρίς επινοήσεις:\n{question}", 200, system_prompt=system_prompt)
+    system_prompt = "Απάντησε με ακρίβεια και χωρίς επινοήσεις."
+    return stream_llm(f"Ερώτηση:\n{question}", 200, system_prompt=system_prompt)
 
-# -----------------------------------------------------------
-# FOLLOW-UP SUGGESTION
-# -----------------------------------------------------------
+
 def generate_followup_question(user_q: str, base_answer: str, intent: str) -> Optional[str]:
-    prompt = f"""Διατύπωσε ΜΙΑ σύντομη, λογική επόμενη ερώτηση, χωρίς επινοήσεις.
+    prompt = f"""
+Διατύπωσε ΜΙΑ σύντομη επόμενη ερώτηση.
 
-Ερώτηση χρήστη: {user_q}
-Απάντηση: {base_answer}
+Ερώτηση χρήστη:
+{user_q}
 
-Επόμενη ερώτηση:"""
+Απάντηση:
+{base_answer}
+
+Επόμενη ερώτηση:
+"""
     t = call_llm(prompt, 60)
     t = t.strip()
     return t if len(t) > 2 else None
 
 # -----------------------------------------------------------
-# BACKWARDS COMPATIBILITY
+# CYPHER GENERATION - BACKWARDS COMPATIBILITY
 # -----------------------------------------------------------
-    return get_llm()
+
+SCHEMA = """
+Nodes:
+- LegalEntity(name)
+- Buyer(name)
+- Winner(name)
+- Award(id,title,original_id,value,submission_date,cpv_code)
+
+Rels:
+- (LegalEntity)<-[BELLONGS_TO]-(Buyer)-[:AWARDS]->(Award)-[:WON_BY]->(Winner)
+
+Note: CPV is stored directly on Award as: award.cpv_code
+"""
+
+def generate_cypher_query(question: str) -> str:
+    return ""

@@ -1,12 +1,3 @@
-"""
-Simple - Entity Extractor (IMPROVED)
-
-Βελτιώσεις:
-1. Disambiguation όταν υπάρχουν πολλά matches
-2. Composite matching (π.χ. "Ιπποκράτειο Θεσσαλονίκης" → ψάχνει ΚΑΙ τα δύο)
-3. Επιστρέφει το canonical name από τη βάση
-4. Καλύτερο scoring με βάρη στις λέξεις-κλειδιά
-"""
 
 import os
 import sys

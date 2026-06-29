@@ -301,7 +301,7 @@ def add_streaming_routes(app: Flask):
 
             # === 0.5) Pending Auth Flow ===
             if engine.PENDING_AUTH.get("active"):
-                APP_PASSWORD = os.getenv("APP_PASSWORD", "EADHSY")
+                APP_PASSWORD = os.getenv("APP_PASSWORD", "")
                 if question.strip() == APP_PASSWORD:
                     engine.IS_AUTHENTICATED_AUDITOR = True
                     engine.PENDING_AUTH["active"] = False
