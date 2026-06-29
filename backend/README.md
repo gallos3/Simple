@@ -127,3 +127,20 @@ cd frontend && npm run dev
   "NEO4J_PASSWORD": "your_password"
 }
 ```
+## Data Availability and Usage
+
+This repository includes a sample Parquet dataset (`simple_public_procurement_sample.parquet`) to allow users to explore the structure and schema of the underlying data.
+
+⚠️ Important:
+The main application does NOT operate directly on the Parquet file.
+
+The system is designed to work with a Neo4j graph database, which contains the full dataset and supports all query and simulation functionalities.
+
+### How to use the sample dataset
+
+The provided Parquet file can be loaded independently for inspection:
+
+```python
+import pandas as pd
+df = pd.read_parquet("path_to_file")
+print(df.head())
