@@ -461,3 +461,14 @@ The core analytical pipeline and hybrid RAG are fully operational. However, the 
 - Pure Legal Knowledge Graph (legal_graph_ingest.py): An ingestion pipeline that converts unstructured legal texts (e.g., procurement laws, articles) directly into connected Neo4j nodes. This will eventually replace or augment the FAISS vector database to enable hybrid, multi-hop legal reasoning.
 - Graph-Native Legal Thresholds (legal_rules_ingestion.py & map_rules_to_graph.py): A fully coded but pending-validation mechanism that decouples financial limits (e.g., the €30,000 threshold for direct awards) from the application logic. Instead of hardcoding rules in Python, thresholds are modeled as graph nodes (Threshold) connected to specific CPV nodes. This future-proofs the system, meaning legislative changes will instantly update the audit engine simply by modifying a node in the graph, requiring zero code changes.
 
+## Related Research Outputs
+
+The methodological framework underlying the diagnostic layer is described in:
+
+Fountoukidis, I., Dafli, E., Antoniou, I. E., & Varsakelis, N. (2026). 
+*A Multi-Layered Diagnostic Framework for Public Procurement Markets: Linking Market Structure, Relational Patterns, and Institutional Dynamics* (v1.0). Zenodo. 
+https://doi.org/10.5281/zenodo.21062840
+
+A representative parquet dataset / graph export is available at:
+
+[INSERT DATASET DOI HERE]
