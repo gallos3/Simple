@@ -470,5 +470,4 @@ Fountoukidis, I., Dafli, E., Antoniou, I. E., & Varsakelis, N. (2026).
 https://doi.org/10.5281/zenodo.21062840
 
 A representative parquet dataset / graph export is available at:
-
-[INSERT DATASET DOI HERE]
+https://doi.org/10.5281/zenodo.21065450
