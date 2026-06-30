@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+
+title: "Simple"
+type: software
+
+authors:
+  - family-names: "Fountoukidis"
+    given-names: "Ioannis"
+
+  - family-names: "Dafli"
+    given-names: "Eleni"
+
+license: MIT
+version: "1.0.0"
+
+references:
+  - type: article
+    title: "A Multi-Layered Diagnostic Framework for Public Procurement Markets: Linking Market Structure, Relational Patterns, and Institutional Dynamics"
+    authors:
+      - family-names: "Fountoukidis"
+        given-names: "Ioannis"
+      - family-names: "Dafli"
+        given-names: "Eleni"
+      - family-names: "Antoniou"
+        given-names: "Ioannis E."
+      - family-names: "Varsakelis"
+        given-names: "Nikos"
+    doi: "10.5281/zenodo.21062840"
