@@ -2,13 +2,13 @@
 Simple - Diagnostic Engine (Fountoukidis Methodology)
 -------------------------------------------------------
 Implements diagnostic metrics for procurement auditing based on:
-  - Foundoukidis, I. G., Antoniou, I., & Varsakelis, N. (2023). Competitive conditions in the public procurement markets: An investigation with network analysis.
+  - Fountoukidis, I. G., Antoniou, I., & Varsakelis, N. (2023). Competitive conditions in the public procurement markets: An investigation with network analysis.
    Journal of Industrial and Business Economics, 50, 347–368. https://doi.org/10.1007/s40812-022-00251-z
-  - Foundoukidis, I. G., Antoniou, I., & Varsakelis, N. (2025). Network analysis for detecting domestic preferences in EU public procurement:
+  - Fountoukidis, I. G., Antoniou, I., & Varsakelis, N. (2025). Network analysis for detecting domestic preferences in EU public procurement:
    Enhancing market transparency and competitiveness. International Journal of Public Sector Management. https://doi.org/10.1108/ijpsm-03-2024-0075 
   - Fountoukidis, I., Dafli, E., Antoniou, I., & Varsakelis, N. (2026). Measuring institutional closure in public procurement: A network-based index 
   from European buyer–supplier data (p. 52). SSRN. https://ssrn.com/abstract=6765160
-  - Foundoukidis, I. G., Dafli, E. L., Antoniou, I. E., & Varsakelis, N. C. (2026). Recurrence as a governance signal: Diagnostic network metrics 
+  - Fountoukidis, I. G., Dafli, E. L., Antoniou, I. E., & Varsakelis, N. C. (2026). Recurrence as a governance signal: Diagnostic network metrics 
   (LSE Research Online Documents on Economics No. 138494). London School of Economics and Political Science. https://www.lse.ac.uk/asset-library/information/greese-no219.pdf
   - Fountoukidis, I., Antoniou, I., & Varsakelis, N. (2026). Many suppliers win, few capture the value: Participation and value concentration in EU public procurement.
   Available at SSRN: https://ssrn.com/abstract=6897598 or http://dx.doi.org/10.2139/ssrn.6897598

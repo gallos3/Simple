@@ -62,6 +62,7 @@ backend/reports/
 backend/exports/
 backend/logs/
 backend/debug_reports/
+before_startup_fix.patch
 
 # Legacy/upload/runtime folders
 
