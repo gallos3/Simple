@@ -802,12 +802,19 @@ def add_streaming_routes(app: Flask):
                         diag_data = calculate_full_diagnostics(authority_name, year, cpv_domain=cpv_domain)
                         diagnosis_text = get_diagnostic_reasoning(diag_data)
 
-                        # 3. Stream Hybrid Answer (Metrics + Law + LLM)
-                        for token in generate_mixed_audit_answer_stream(
-                            question, entity["value"], year, {}, passages, diag_data, diagnosis_text
-                        ):
-                            full_answer_str += token
-                            yield create_sse_event("token", token)
+                        # 3. Stream deterministic report directly when available.
+                        # Bypasses LLM to avoid context-window overflow and stop-sequence truncation.
+                        if diagnosis_text:
+                            for chunk in stream_text_chunks(diagnosis_text + "\n\n", chunk_size=8, delay=0.01):
+                                full_answer_str += chunk
+                                yield chunk
+                        else:
+                            # Fallback: LLM hybrid answer when no deterministic report is available
+                            for token in generate_mixed_audit_answer_stream(
+                                question, entity["value"], year, {}, passages, diag_data, diagnosis_text
+                            ):
+                                full_answer_str += token
+                                yield create_sse_event("token", token)
 
                 # ============ REPORT ============
                 elif intent == "report":
