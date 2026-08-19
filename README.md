@@ -297,6 +297,10 @@ Approval logic:
 - Draft scenarios remain expert-only
 - Approved scenarios become available for training use
 
+### Stateless Simulation Replay
+
+The simulation engine does not rely on server-side session storage. At each turn, the backend reconstructs the current simulation state deterministically from the conversation history sent by the frontend. This makes the serious-game workflow resilient to backend restarts and avoids server-side session persistence complexity.
+
 ---
 
 ### Human-Centered Interaction Layer
