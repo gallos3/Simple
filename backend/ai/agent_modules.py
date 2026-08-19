@@ -186,7 +186,15 @@ def generate_mixed_audit_answer_stream(
 
 ΣΥΝΟΨΗ ΔΕΔΟΜΕΝΩΝ:
 {summary_text}
-
+"""
+    
+    if diagnosis_text:
+        system_prompt += f"""
+ΔΙΑΓΝΩΣΤΙΚΑ ΑΠΟΤΕΛΕΣΜΑΤΑ:
+{diagnosis_text}
+"""
+        
+    system_prompt += f"""
 ΝΟΜΟΘΕΣΙΑ:
 {context}
 
@@ -194,14 +202,10 @@ def generate_mixed_audit_answer_stream(
 Χωρίς ανάλυση, χωρίς παραδείγματα.
 """
 
-    response = llm.stream([
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question}
-    ])
-
-    for chunk in response:
-        if hasattr(chunk, "content") and chunk.content:
-            yield chunk.content
+    yield from stream_llm(
+        prompt=question,
+        system_prompt=system_prompt
+    )
 
 
 def generate_mixed_audit_answer(
