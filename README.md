@@ -130,6 +130,14 @@ The system also implements cross-layer diagnostic indicators, including:
 
 ---
 
+### Recent stability and transparency improvements
+
+- Deterministic diagnostic reports are now streamed directly to the user, avoiding unnecessary LLM summarisation and improving response time.
+- Diagnostic outputs include transparency notes when a dominant CPV is inferred for market-level analysis.
+- Recurrence diagnostics now include HF, PA, and adapted Adamic-Adar (AA), with plain-language explanations of key metrics.
+
+---
+
 ### What Makes This System Unique
 
 Simple_Federated reads indicators **jointly**, allowing the system to distinguish between:
