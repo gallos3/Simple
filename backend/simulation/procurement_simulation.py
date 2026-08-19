@@ -6,6 +6,7 @@ import re
 import os
 import json
 import glob
+import copy
 from typing import List, Dict, Generator
 from ai.llm_interface import call_llm, stream_llm
 
@@ -561,6 +562,21 @@ def load_json_scenario_graphs(graphs_dir: str = None) -> dict:
 
 
 
+def _sanitize_scenario(graph: dict) -> dict:
+    """Creates a runtime-safe copy of the scenario graph by removing instructor-only fields."""
+    safe_graph = copy.deepcopy(graph)
+    if "nodes" in safe_graph:
+        for nid, node in safe_graph["nodes"].items():
+            node.pop("ground_truth", None)
+            node.pop("instructor_notes", None)
+            node.pop("rationale_instructor", None)
+            node.pop("hidden_scoring", None)
+            if "options" in node:
+                for opt in node["options"].values():
+                    opt.pop("correct", None)
+                    opt.pop("correct_option", None)
+    return safe_graph
+
 def get_runtime_scenario_graphs() -> dict:
     try:
         active_json_graphs = load_json_scenario_graphs()
@@ -569,8 +585,10 @@ def get_runtime_scenario_graphs() -> dict:
         active_json_graphs = {}
         
     runtime_graphs = {}
-    runtime_graphs.update(SCENARIO_GRAPHS)
-    runtime_graphs.update(active_json_graphs)
+    for sid, graph in SCENARIO_GRAPHS.items():
+        runtime_graphs[sid] = _sanitize_scenario(graph)
+    for sid, graph in active_json_graphs.items():
+        runtime_graphs[sid] = _sanitize_scenario(graph)
     
     print(f"[GRAPH RUNTIME] Loaded active JSON graphs: {list(active_json_graphs.keys())}")
     print("[GRAPH RUNTIME] Draft JSON graphs are not playable.")
@@ -1053,6 +1071,24 @@ Audit risk: {state['metrics']['audit_risk']}
 Administrative burden: {state['metrics']['admin_burden']}
 Value-for-money risk: {state['metrics']['value_for_money_risk']}"""
 
+def get_temporal_critical_errors(events: list, scenario_id: str = None) -> list:
+    errors = []
+    if scenario_id != "direct_award_fragmentation":
+        return errors
+        
+    choices = [(ev.get("node"), ev.get("choice")) for ev in events]
+    
+    if ("n1", "A") in choices:
+        errors.append("Proceeded with isolated purchases before assessing total estimated value, creating fragmentation risk.")
+    if ("n1", "C") in choices:
+        errors.append("Preserved separate processing despite similar needs, creating fragmentation / weak consolidation risk.")
+    if ("n2", "A") in choices:
+        errors.append("Attempted ex-post justification of isolated handling after the risk had already emerged.")
+    if ("n3", "B") in choices:
+        errors.append("Attempted to split value across financial years to avoid broader review.")
+        
+    return errors
+
 def render_labyrinth_final_report(graph: dict, state: dict, last_choice: str=None, last_opt: dict=None) -> str:
     score = calculate_labyrinth_score(state)
     audit_label = get_risk_label(state['metrics']['audit_risk'])
@@ -1064,6 +1100,14 @@ def render_labyrinth_final_report(graph: dict, state: dict, last_choice: str=Non
     expert_log_str = ""
     for ev in state["events"]:
         expert_log_str += f"- Node {ev['node']}, Chose {ev['choice']}: {ev['expert_log']} (Feedback: {ev['feedback']})\n"
+        
+    critical_errors = get_temporal_critical_errors(state["events"], state.get("scenario_id"))
+    critical_errors_str = ""
+    if critical_errors:
+        critical_errors_str = "[CRITICAL PROCEDURAL ERRORS]\n"
+        for err in critical_errors:
+            critical_errors_str += f"- WARNING: {err}\n"
+        critical_errors_str += "\n"
         
     feedback_prefix = ""
     if last_choice and last_opt:
@@ -1093,7 +1137,7 @@ Value-for-money risk: {vfm_label} ({state['metrics']['value_for_money_risk']})
 Time impact: {state['metrics']['time_cost']}
 Administrative burden: {state['metrics']['admin_burden']}
 
-[EXPERT REVIEW LOG]
+{critical_errors_str}[EXPERT REVIEW LOG]
 {expert_log_str}
 [DEBRIEF]
 Review your path and expert log to identify areas where your choices increased audit risk or administrative burden.
