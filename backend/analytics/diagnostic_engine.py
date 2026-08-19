@@ -709,8 +709,8 @@ def calculate_full_diagnostics(authority_name: str = None, year: str = "2024", c
     return {
         "requested_authority": authority_name,
         "requested_year": year,
-        "requested_cpv": cpv_domain,
-        "is_cpv_filtered": bool(cpv_domain and cpv_domain != "ALL"),
+        "requested_cpv": cpv_to_use,
+        "is_cpv_filtered": bool(cpv_to_use and cpv_to_use != "ALL"),
         "base": base,
         "network_entropy": entropy,
         "conditional_entropy": conditional,
