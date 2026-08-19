@@ -666,12 +666,41 @@ def calculate_recurrence_signals(year: str = None, cpv_domain: str = None) -> Di
         }
 
     res = results[0]
+
+    # --- Adapted Adamic-Adar (separate flat Cypher, no CALL subquery, no APOC) ---
+    # For each (Buyer, Winner) pair: collect shared Award nodes within the same CPV scope,
+    # count the degree of each shared Award, and sum 1.0/log(deg+1.0) per pair.
+    # Then aggregate as market-level avg(aa). Adapted from predictor_unified.py.
+    aa_cypher = f"""
+    MATCH (u:Buyer)-[:AWARDS]-(a:Award)-[:WON_BY]-(w:Winner)
+    WHERE a.submission_date IS NOT NULL
+      {cpv_filter}
+
+    WITH u, w, collect(DISTINCT a) AS past_awards
+    WITH u, w,
+         CASE WHEN size(past_awards) = 0 THEN [null] ELSE past_awards END AS past_awards
+    UNWIND past_awards AS a_hist
+    OPTIONAL MATCH (a_hist)--(n)
+    WITH u, w, a_hist, count(DISTINCT n) AS deg_a
+    WITH u, w,
+         sum(CASE WHEN deg_a IS NULL OR deg_a < 1 THEN 0.0
+                  ELSE 1.0 / log(toFloat(deg_a) + 1.0) END) AS aa
+
+    RETURN avg(aa) AS aa_mean
+    """
+    aa_results = execute_cypher(aa_cypher, params, format_output=False)
+    aa_mean = None
+    if aa_results and isinstance(aa_results, list) and aa_results[0]:
+        raw_aa = aa_results[0].get("aa_mean")
+        if raw_aa is not None:
+            aa_mean = round(float(raw_aa), 4)
+
     return {
         "status": "ok",
         "hf_mean": round(float(res.get("hf_mean") or 0.0), 4),
         "hf_max":  round(float(res.get("hf_max")  or 0.0), 4),
         "pa_mean": round(float(res.get("pa_mean")  or 0.0), 4),
-        "aa_mean": None   # AA omitted (required CALL subquery)
+        "aa_mean": aa_mean
     }
 
 
@@ -754,7 +783,13 @@ def interpret_hf(hf: float) -> dict:
 
 def interpret_aa(aa: float) -> dict:
     aa = aa or 0.0
-    return {"raw": aa, "trans": None, "interp": "Δεν υπάρχει διαθέσιμος κανόνας", "rule": "-", "action": "-"}
+    if aa >= 2.0:
+        interp, rule, act = "Υψηλή δομική εγγύτητα (High structural proximity)", "aa >= 2.0", "Ελέγξτε επαναλαμβανόμενες ή δομικά κοντινές σχέσεις αγοραστή-αναδόχου"
+    elif aa >= 1.0:
+        interp, rule, act = "Μέτρια δομική εγγύτητα (Medium structural proximity)", "1.0 <= aa < 2.0", "Παρακολούθηση κοινών ιστορικών συνδέσεων"
+    else:
+        interp, rule, act = "Χαμηλή δομική εγγύτητα (Low structural proximity)", "aa < 1.0", "Καμία ειδική ενέργεια"
+    return {"raw": aa, "trans": None, "interp": interp, "rule": rule, "action": act}
 
 def interpret_vcd(vcd: float) -> dict:
     vcd = vcd or 0.0
@@ -806,6 +841,10 @@ def format_interpretation(name: str, res: dict, include_explanation: bool = Fals
             lines.append("\n💡 Επεξήγηση: Το VCD εξετάζει αν οι ανάδοχοι που κερδίζουν πολλές συμβάσεις είναι και αυτοί που απορροφούν τη μεγαλύτερη αξία. Υψηλό VCD δείχνει ασυμμετρία μεταξύ πλήθους συμβάσεων και οικονομικής αξίας.")
         elif name == "Entropy_normalized H(Y)":
             lines.append("\n💡 Επεξήγηση: Η εντροπία μετράει πόσο ομοιόμορφα κατανέμονται οι συμβάσεις. Τιμές κοντά στο 0 δείχνουν συγκέντρωση σε λίγους φορείς ή αναδόχους, ενώ υψηλότερες τιμές δείχνουν μεγαλύτερη διασπορά.")
+        elif name == "AA_mean":
+            lines.append("\n💡 Επεξήγηση: Το Adamic-Adar μετρά τη δομική εγγύτητα αγοραστή και αναδόχου μέσω κοινών ιστορικών συνδέσεων. Υψηλότερη τιμή σημαίνει ισχυρότερο σήμα επαναλαμβανόμενης ή κοντινής δικτυακής σχέσης.")
+        elif name == "PA_mean":
+            lines.append("\n💡 Επεξήγηση: Το PA βασίζεται στο γινόμενο του βαθμού του αγοραστή και του βαθμού του αναδόχου. Επειδή οι τιμές μπορεί να είναι πολύ μεγάλες, η ερμηνεία βασίζεται κυρίως στη λογαριθμική κλίμακα log10(PA+1).")
         
     return "\n".join(lines) + "\n"
 
@@ -934,16 +973,17 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
     report += f"Scope: Πολυετές Δίκτυο Αγοράς\n\n"
     if recurrence_data.get("status") == "ok":
         pa_res = interpret_pa(recurrence_data.get("pa_mean", 0.0))
-        report += format_interpretation("PA_mean", pa_res)
+        report += format_interpretation("PA_mean", pa_res, include_explanation=True)
         report += "\n"
 
         hf_res = interpret_hf(recurrence_data.get("hf_mean", 0.0))
         report += format_interpretation("HF_mean", hf_res)
         report += "\n"
         
-        aa_res = interpret_aa(recurrence_data.get("aa_mean", 0.0))
-        report += format_interpretation("AA_mean", aa_res)
-        report += "\n"
+        if recurrence_data.get("aa_mean") is not None:
+            aa_res = interpret_aa(recurrence_data.get("aa_mean", 0.0))
+            report += format_interpretation("AA_mean", aa_res, include_explanation=True)
+            report += "\n"
     else:
         report += "Δεν υπάρχουν επαρκή δεδομένα δικτύου για ανάλυση επαναληψιμότητας.\n\n"
 
