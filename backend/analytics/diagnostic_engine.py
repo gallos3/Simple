@@ -786,7 +786,7 @@ def interpret_ici(ici: float) -> dict:
         interp, rule, act = "Χαμηλό κλείσιμο (Low closure)", "ici <= 0.02", "Καμία απαιτούμενη ενέργεια"
     return {"raw": ici, "trans": None, "interp": interp, "rule": rule, "action": act}
 
-def format_interpretation(name: str, res: dict) -> str:
+def format_interpretation(name: str, res: dict, include_explanation: bool = False) -> str:
     lines = []
     lines.append(f"**Metric:** {name}  ")
     val_str = f"{res['raw']:,.4f}" if isinstance(res['raw'], float) else f"{res['raw']}"
@@ -796,6 +796,17 @@ def format_interpretation(name: str, res: dict) -> str:
     lines.append(f"**Interpretation:** {res['interp']}  ")
     lines.append(f"**Rule:** {res['rule']}  ")
     lines.append(f"**Action:** {res['action']}")
+    
+    if include_explanation:
+        if name == "ICI":
+            lines.append("\n💡 Επεξήγηση: Ο δείκτης ICI συνδυάζει τη συγκέντρωση της αγοράς με την επαναληψιμότητα των συνεργασιών. Υψηλή τιμή σημαίνει πιο κλειστό δίκτυο με επαναλαμβανόμενους αναδόχους και αυξημένη ανάγκη ελεγκτικής διερεύνησης.")
+        elif name == "HHI":
+            lines.append("\n💡 Επεξήγηση: Το HHI μετράει τη συγκέντρωση της αγοράς. Υψηλότερες τιμές σημαίνουν ότι μεγαλύτερο μέρος της αξίας συγκεντρώνεται σε λίγους αναδόχους.")
+        elif name == "VCD":
+            lines.append("\n💡 Επεξήγηση: Το VCD εξετάζει αν οι ανάδοχοι που κερδίζουν πολλές συμβάσεις είναι και αυτοί που απορροφούν τη μεγαλύτερη αξία. Υψηλό VCD δείχνει ασυμμετρία μεταξύ πλήθους συμβάσεων και οικονομικής αξίας.")
+        elif name == "Entropy_normalized H(Y)":
+            lines.append("\n💡 Επεξήγηση: Η εντροπία μετράει πόσο ομοιόμορφα κατανέμονται οι συμβάσεις. Τιμές κοντά στο 0 δείχνουν συγκέντρωση σε λίγους φορείς ή αναδόχους, ενώ υψηλότερες τιμές δείχνουν μεγαλύτερη διασπορά.")
+        
     return "\n".join(lines) + "\n"
 
 # =============================================================================
@@ -909,13 +920,13 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
     hy_norm = entropy.get("H_Y_normalized") if entropy.get("status") == "ok" and entropy.get("H_Y_normalized") is not None else None
     if hy_norm is not None:
         ent_res = interpret_entropy(hy_norm)
-        report += format_interpretation("Entropy_normalized H(Y)", ent_res)
+        report += format_interpretation("Entropy_normalized H(Y)", ent_res, include_explanation=True)
         report += "\n"
 
     vcd_t = vcd_data.get("vcd_total")
     if vcd_data.get("status") == "ok" and vcd_t is not None:
         vcd_res = interpret_vcd(vcd_t)
-        report += format_interpretation("VCD", vcd_res)
+        report += format_interpretation("VCD", vcd_res, include_explanation=True)
         report += "\n"
 
     # 3. RECURRENCE
@@ -939,7 +950,7 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
     # 4. FINAL DIAGNOSIS
     report += f"### 📊 FINAL DIAGNOSIS\n\n"
     
-    report += format_interpretation("HHI", hhi_res)
+    report += format_interpretation("HHI", hhi_res, include_explanation=True)
     report += "\n"
     
     if recurrence_data.get("status") == "ok":
@@ -949,7 +960,9 @@ def get_diagnostic_reasoning(diag_data: Dict[str, Any]) -> str:
         report += "\n"
         
     if ici_data.get("status") == "ok":
-        report += format_interpretation("ICI", ici_res)
+        report += format_interpretation("ICI", ici_res, include_explanation=True)
         report += "\n"
+
+    report += "💡 Επεξήγηση: Το συνολικό σκορ κινδύνου προκύπτει από συνδυασμό συγκέντρωσης, επαναληψιμότητας, διασποράς αναδόχων και διαγνωστικών δεικτών. Δεν αποτελεί τελική νομική κρίση αλλά ένδειξη για περαιτέρω έλεγχο.\n"
 
     return report
