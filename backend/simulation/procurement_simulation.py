@@ -1,7 +1,3 @@
-"""
-Procurement Simulation Engine - Serious Game Logic (V3 - Server-Side Turn Control)
-The LLM cannot be trusted to track turns or end the game. We enforce it here.
-"""
 import re
 import os
 import json
@@ -172,53 +168,36 @@ def get_scenario_pattern(question: str) -> dict:
     return SCENARIO_PATTERNS["general_risk"]
 
 def build_fallback_start(pattern: dict) -> str:
-    return f"""You are an Educational Procurement Trainer. The RAG context is insufficient, so you must create a professional training scenario.
+    return f"""You are an Educational Procurement Trainer. Create a concise but concrete professional case study.
 
 ABSOLUTE RULES:
-1. Do NOT use specific legal articles, Greek Law 4412/2016, EU directive numbers, thresholds, deadlines, sanctions, case-law, or procedural obligations.
-2. Do NOT present legal conclusions (e.g., avoid 'this is illegal').
-3. Use safe wording: 'risk indicator', 'requires documented justification', 'requires verification against applicable rules', 'may create audit concern', 'requires further review', 'weak audit trail', 'transparency safeguard', 'value-for-money reasoning'.
-4. Do NOT say 'not legally grounded'.
-5. Output in clear, professional English.
-6. The number of options and the number of learning focuses must match exactly.
-7. Do NOT ask whether something is legally compliant. Instead, ask practical risk management questions.
-8. Do NOT invent regulatory bodies, registers, certifications, official lists, acronyms, or authorities (e.g., no ENBs).
-9. Do NOT mention: Greek Law 4412/2016, EU Directives, legal articles, notified bodies, ENBs, thresholds, deadlines, sanctions, or formal procedures.
-10. Do NOT use 'direct award' as a legal mechanism in fallback mode.
+1. Do NOT use specific legal articles, Greek Law 4412/2016, EU directive numbers, thresholds, deadlines, or sanctions.
+2. Output in clear, professional English.
+3. Keep the response concise (target ~250-350 words).
+
+Your scenario MUST contain:
+- Contracting authority, procurement object, and estimated value.
+- Current procedural stage.
+- One operational or procedural constraint.
+- Two or three specific findings or risk indicators based on this risk pattern: "{pattern['name']}".
+- The participant's professional role.
+- EXACTLY three concise, scenario-specific options.
 
 OUTPUT FORMAT (strictly follow this layout):
 [SIMULATION MODE]
 Professional Procurement Training Mode
 
 [SCENARIO]
-{pattern['scenario']}
-
-[RISK PATTERN]
-{pattern['name']}
-
-[TRAINING OBJECTIVE]
-Practice identifying procurement risk indicators, documentation gaps, and appropriate audit safeguards.
+(Provide the detailed scenario facts here)
 
 [CHALLENGE]
-{pattern['challenge']}
-Do NOT ask if it is legal or compliant.
+Provide one clear decision task. Do NOT ask if it is legal or compliant.
 
 [OPTIONS]
-Provide exactly three options:
-{pattern['options']}
-
-[LEARNING FOCUS]
-{pattern['learning_focus']}
-
-[FEEDBACK RULE]
-Feedback will evaluate:
-- identification of risk indicators
-- quality of documentation reasoning
-- transparency safeguards
-- evidence trail
-- value-for-money reasoning
-- proportionality
-- whether further legal verification is needed
+Generate exactly three concrete, scenario-specific participant actions.
+Do NOT label any option as fast, balanced, delayed, weak, strong, safe, correct, or preferred.
+The options must describe concrete administrative steps or procedural choices.
+(Format as A, B, and C)
 
 [LIMITATION]
 This is a professional training simulation. It is not legal advice and does not constitute a final legal assessment."""
@@ -227,73 +206,28 @@ def build_fallback_continue(pattern: dict) -> str:
     return f"""You are an Educational Procurement Trainer evaluating the student's choice in a professional fallback scenario.
 
 ABSOLUTE RULES:
-1. Do NOT use specific legal articles, Greek Law 4412/2016, EU directive numbers, thresholds, deadlines, sanctions, case-law, or procedural obligations.
-2. Do NOT present legal conclusions (e.g., avoid 'this is illegal').
-3. Use safe wording: 'risk indicator', 'requires documented justification', 'requires verification against applicable rules', 'may create audit concern', 'requires further review', 'weak audit trail', 'transparency safeguard', 'value-for-money reasoning'.
-4. Do NOT say 'not legally grounded'.
-5. Output in clear, professional English.
-6. The number of options and the number of learning focuses must match exactly.
-7. Do NOT ask whether something is legally compliant. Instead, ask practical risk management questions.
-8. Do NOT invent regulatory bodies, registers, certifications, official lists, acronyms, or authorities (e.g., no ENBs).
-9. Do NOT mention: Greek Law 4412/2016, EU Directives, legal articles, notified bodies, ENBs, thresholds, deadlines, sanctions, or formal procedures.
-10. Do NOT use 'direct award' as a legal mechanism in fallback mode.
+1. Do NOT use specific legal articles, Greek Law 4412/2016, EU directive numbers, thresholds, or deadlines.
+2. Output in clear, professional English.
+3. Keep the assessment concise (target ~120-220 words).
+4. Assess the participant's ACTUAL option using the PREVIOUS OPTIONS provided in the context. Do not assign a new meaning to the selected letter.
+5. Do not invent issues such as nepotism, favouritism, corruption, or illegality unless these are supported by the scenario facts.
+6. Do NOT generate a new scenario, a new challenge, or new options.
 
 OUTPUT FORMAT (strictly follow this layout):
-[SIMULATION MODE]
-Professional Procurement Training Mode
-
-[YOUR CHOICE]
-(Restate what the user chose)
-
 [ASSESSMENT]
-(Evaluate the choice based on general logic and risk management, using safe wording)
+A concise evaluation of the participant's actual decision.
 
 [WHY]
-(Explain the logic without citing laws)
+A scenario-specific explanation.
 
-[RISK PATTERN]
-{pattern['name']}
+[KEY RISKS]
+Two or three short bullet points tied to the previous scenario.
 
-[TRAINING OBJECTIVE]
-Practice identifying procurement risk indicators, documentation gaps, and appropriate audit safeguards.
+[RECOMMENDED ACTION]
+One concise professional next step.
 
-[LIMITATION]
-This is a professional training simulation. It is not legal advice and does not constitute a final legal assessment.
-
----
-[SCENARIO]
-A new professional procurement training scenario step related to the {pattern['name']}.
-
-[RISK PATTERN]
-{pattern['name']}
-
-[TRAINING OBJECTIVE]
-Practice identifying procurement risk indicators, documentation gaps, and appropriate audit safeguards.
-
-[CHALLENGE]
-Provide a follow-up professional decision-making question. Do NOT ask if it is legal or compliant.
-
-[OPTIONS]
-Provide exactly three options:
-A. ...
-B. ...
-C. ...
-
-[LEARNING FOCUS]
-Explain the professional reasoning skill tested by each option.
-
-[FEEDBACK RULE]
-Feedback will evaluate:
-- identification of risk indicators
-- quality of documentation reasoning
-- transparency safeguards
-- evidence trail
-- value-for-money reasoning
-- proportionality
-- whether further legal verification is needed
-
-[LIMITATION]
-This is a professional training simulation. It is not legal advice and does not constitute a final legal assessment."""
+[REFLECTION QUESTION]
+One optional open-ended question linked to the case."""
 
 def build_fallback_conclusion(pattern: dict) -> str:
     return f"""You are an Educational Procurement Trainer concluding a professional fallback scenario.
@@ -430,31 +364,31 @@ This is a professional training simulation. It is not legal advice and does not 
 
 def validate_scenario_graph(graph: dict) -> tuple[bool, list[str]]:
     errors = []
-    
+
     # 1. Required top-level fields
     required_keys = ["scenario_id", "title", "validation_status", "start_node", "max_steps", "nodes"]
     for k in required_keys:
         if k not in graph:
             errors.append(f"Missing required key: {k}")
-            
+
     if errors:
         return False, errors
-        
+
     # 2. validation_status
     if graph["validation_status"] not in ["draft", "needs_review", "approved", "active"]:
         errors.append(f"Invalid validation_status: {graph['validation_status']}")
-        
+
     # 3. review.approval_status
     review = graph.get("review", {})
     if review.get("approval_status") not in ["needs_review", "approved"]:
         errors.append(f"Invalid review.approval_status: {review.get('approval_status')}")
-        
+
     # 4. start_node
     start_node = graph["start_node"]
     nodes = graph["nodes"]
     if start_node not in nodes:
         errors.append(f"start_node '{start_node}' not found in nodes")
-        
+
     # 5, 6, 7, 8. Nodes and Options
     for node_id, node in nodes.items():
         for nk in ["text", "challenge", "options"]:
@@ -468,20 +402,20 @@ def validate_scenario_graph(graph: dict) -> tuple[bool, list[str]]:
                 for ok in ["text", "next_node", "score_delta", "time_delta", "audit_risk_delta", "admin_burden_delta", "value_for_money_risk_delta", "feedback", "expert_log"]:
                     if ok not in opt:
                         errors.append(f"Node '{node_id}' Option '{opt_key}' missing {ok}")
-                
+
                 if "next_node" in opt:
                     nn = opt["next_node"]
                     if nn != "END" and nn not in nodes:
                         errors.append(f"Node '{node_id}' Option '{opt_key}' next_node '{nn}' does not exist")
-        
+
         # 11. Dangerous terms
         dangerous_terms = [
-            "illegal", 
-            "legally compliant", 
-            "compliance failure", 
-            "sanction", 
-            "court decision", 
-            "exact threshold", 
+            "illegal",
+            "legally compliant",
+            "compliance failure",
+            "sanction",
+            "court decision",
+            "exact threshold",
             "exact article",
             "violates",
             "must comply with article",
@@ -491,17 +425,17 @@ def validate_scenario_graph(graph: dict) -> tuple[bool, list[str]]:
         if "options" in node:
             for opt in node["options"].values():
                 text_fields.extend([opt.get("text", ""), opt.get("feedback", ""), opt.get("expert_log", "")])
-        
+
         is_rag_grounded = graph.get("authoring_source_mode") == "rag_grounded"
         has_source_snippets = bool(graph.get("source_snippets")) or bool(graph.get("source_basis_snippets"))
-        
+
         if not (is_rag_grounded and has_source_snippets):
             for t in text_fields:
                 t_lower = t.lower()
                 for dt in dangerous_terms:
                     if dt in t_lower:
                         errors.append(f"Node '{node_id}' contains dangerous term '{dt}' without valid RAG snippets")
-                        
+
     # 9. Path reaches END
     ends_reached = 0
     def dfs(node_id, depth):
@@ -518,35 +452,35 @@ def validate_scenario_graph(graph: dict) -> tuple[bool, list[str]]:
             elif nn in nodes:
                 dfs(nn, depth + 1)
         return True
-        
+
     if start_node in nodes:
         dfs(start_node, 1)
     if ends_reached == 0:
         errors.append("No path reaches 'END'")
-        
+
     # 10. max_steps
     if graph["max_steps"] > 6:
         errors.append("max_steps must be <= 6")
-        
+
     return len(errors) == 0, errors
 
 
 def load_json_scenario_graphs(graphs_dir: str = None) -> dict:
     if graphs_dir is None:
         graphs_dir = os.path.join(os.path.dirname(__file__), "graphs")
-        
+
     loaded_graphs = {}
     if not os.path.exists(graphs_dir):
         return loaded_graphs
-        
+
     for filepath in glob.glob(os.path.join(graphs_dir, "*.json")):
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 graph = json.load(f)
-            
+
             is_valid, errors = validate_scenario_graph(graph)
             scenario_id = graph.get("scenario_id", os.path.basename(filepath))
-            
+
             if is_valid:
                 if graph.get("validation_status") == "active" and graph.get("review", {}).get("approval_status") == "approved":
                     loaded_graphs[scenario_id] = graph
@@ -557,7 +491,7 @@ def load_json_scenario_graphs(graphs_dir: str = None) -> dict:
                 print(f"[GRAPH VALIDATION] {scenario_id}: invalid - {errors}")
         except Exception as e:
             print(f"[GRAPH VALIDATION] Failed to load {filepath}: {e}")
-            
+
     return loaded_graphs
 
 
@@ -583,13 +517,13 @@ def get_runtime_scenario_graphs() -> dict:
     except Exception as e:
         print(f"[GRAPH RUNTIME] Error loading JSON graphs: {e}")
         active_json_graphs = {}
-        
+
     runtime_graphs = {}
     for sid, graph in SCENARIO_GRAPHS.items():
         runtime_graphs[sid] = _sanitize_scenario(graph)
     for sid, graph in active_json_graphs.items():
         runtime_graphs[sid] = _sanitize_scenario(graph)
-    
+
     print(f"[GRAPH RUNTIME] Loaded active JSON graphs: {list(active_json_graphs.keys())}")
     print("[GRAPH RUNTIME] Draft JSON graphs are not playable.")
     return runtime_graphs
@@ -599,7 +533,7 @@ def list_available_graphs() -> dict:
     graphs_dir = os.path.join(os.path.dirname(__file__), "graphs")
     draft_graphs = []
     validation_errors = {}
-    
+
     if os.path.exists(graphs_dir):
         for filepath in glob.glob(os.path.join(graphs_dir, "*.json")):
             try:
@@ -613,7 +547,7 @@ def list_available_graphs() -> dict:
                     draft_graphs.append(sid)
             except Exception as e:
                 validation_errors[os.path.basename(filepath)] = str(e)
-                
+
     return {
         "in_code_graphs": list(SCENARIO_GRAPHS.keys()),
         "json_draft_graphs": draft_graphs,
@@ -904,21 +838,21 @@ def extract_choice(user_text: str):
         "b": "B", "β": "B",
         "c": "C", "γ": "C", "ψ": "C", "Ψ": "C"
     }
-    
+
     # Direct match mapping
     if text in choice_map:
         return choice_map[text]
-        
+
     match = re.search(r'\b(?:option|επιλογή|διάλεξα|choose|select)\s+([abcαβγψ])\b', text)
     if match:
         found = match.group(1).lower()
         return choice_map.get(found)
-        
+
     match = re.search(r'^([abcαβγψ])\b', text)
     if match:
         found = match.group(1).lower()
         return choice_map.get(found)
-        
+
     return None
 
 def apply_labyrinth_option(state: dict, opt: dict):
@@ -933,7 +867,7 @@ def replay_labyrinth_state(history: list, scenario_id: str) -> dict:
     graph = runtime_graphs.get(scenario_id)
     if not graph:
         return None
-    
+
     state = {
         "scenario_id": scenario_id,
         "current_node": graph["start_node"],
@@ -950,12 +884,12 @@ def replay_labyrinth_state(history: list, scenario_id: str) -> dict:
         "events": [],
         "finished": False
     }
-    
+
     started = False
     for msg in history:
         role = msg.get("role", "")
         text = get_msg_text(msg)
-        
+
         if role in ["assistant", "bot"]:
             if "[SIMULATION MODE]\nProfessional Procurement Labyrinth" in text and f"[SCENARIO_ID]\n{scenario_id}" in text and "[STEP]\n1 /" in text:
                 started = True
@@ -966,29 +900,29 @@ def replay_labyrinth_state(history: list, scenario_id: str) -> dict:
                 state["metrics"] = {"score_delta": 0, "time_cost": 0, "audit_risk": 0, "admin_burden": 0, "value_for_money_risk": 0}
                 state["events"] = []
                 state["finished"] = False
-                
+
         elif role == "user" and started and not state["finished"]:
             choice = extract_choice(text)
             if choice:
                 node_data = graph["nodes"].get(state["current_node"])
                 if node_data and choice in node_data["options"]:
                     opt = node_data["options"][choice]
-                    
+
                     state["choices"].append(choice)
                     state["step_count"] += 1
-                    
+
                     apply_labyrinth_option(state, opt)
-                    
+
                     state["events"].append({
                         "node": state["current_node"],
                         "choice": choice,
                         "feedback": opt["feedback"],
                         "expert_log": opt["expert_log"]
                     })
-                    
+
                     state["current_node"] = opt["next_node"]
                     state["path"].append(opt["next_node"])
-                    
+
                     if state["current_node"] == "END" or state["step_count"] >= graph["max_steps"]:
                         state["finished"] = True
 
@@ -1075,9 +1009,9 @@ def get_temporal_critical_errors(events: list, scenario_id: str = None) -> list:
     errors = []
     if scenario_id != "direct_award_fragmentation":
         return errors
-        
+
     choices = [(ev.get("node"), ev.get("choice")) for ev in events]
-    
+
     if ("n1", "A") in choices:
         errors.append("Proceeded with isolated purchases before assessing total estimated value, creating fragmentation risk.")
     if ("n1", "C") in choices:
@@ -1086,21 +1020,21 @@ def get_temporal_critical_errors(events: list, scenario_id: str = None) -> list:
         errors.append("Attempted ex-post justification of isolated handling after the risk had already emerged.")
     if ("n3", "B") in choices:
         errors.append("Attempted to split value across financial years to avoid broader review.")
-        
+
     return errors
 
 def render_labyrinth_final_report(graph: dict, state: dict, last_choice: str=None, last_opt: dict=None) -> str:
     score = calculate_labyrinth_score(state)
     audit_label = get_risk_label(state['metrics']['audit_risk'])
     vfm_label = get_risk_label(state['metrics']['value_for_money_risk'])
-    
+
     path_str = " → ".join(state["path"])
     choices_str = " → ".join(state["choices"])
-    
+
     expert_log_str = ""
     for ev in state["events"]:
         expert_log_str += f"- Node {ev['node']}, Chose {ev['choice']}: {ev['expert_log']} (Feedback: {ev['feedback']})\n"
-        
+
     critical_errors = get_temporal_critical_errors(state["events"], state.get("scenario_id"))
     critical_errors_str = ""
     if critical_errors:
@@ -1108,11 +1042,11 @@ def render_labyrinth_final_report(graph: dict, state: dict, last_choice: str=Non
         for err in critical_errors:
             critical_errors_str += f"- WARNING: {err}\n"
         critical_errors_str += "\n"
-        
+
     feedback_prefix = ""
     if last_choice and last_opt:
         feedback_prefix = f"[YOUR CHOICE]\n{last_choice}\n\n[FEEDBACK]\n{last_opt['feedback']}\n\n"
-        
+
     return f"""[SIMULATION MODE]
 Professional Procurement Labyrinth
 [SCENARIO_ID]
@@ -1178,13 +1112,13 @@ def _count_student_turns(history: List[Dict]) -> int:
 
 def build_simulation_prompt(question: str, history: List[Dict], rag_ctx: str, is_conclusion: bool = False) -> str:
     is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"])
-    
+
     if is_start:
         # Extract specific focus if possible (anything after the start keywords)
         focus = question
         for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"]:
             focus = focus.lower().replace(w, "").strip()
-            
+
         prompt = (
             f"GENERATE A BRAND NEW, UNIQUE PROCUREMENT TRAINING SCENARIO focused on: '{focus if focus else 'General Procurement'}'.\n"
             "Domain: Public Procurement (EU Directives / Greek Law 4412/2016).\n"
@@ -1200,23 +1134,47 @@ def build_simulation_prompt(question: str, history: List[Dict], rag_ctx: str, is
         if msg.get("role") in ["bot", "assistant"]:
             last_professor_text = msg.get("text", "")
             break
-    
+
+    # Extract sections if they exist, otherwise use full text up to 1500 chars to ensure [OPTIONS] are preserved.
+    extracted = ""
+    if "[SCENARIO]" in last_professor_text and "[OPTIONS]" in last_professor_text:
+        # Extract SCENARIO block
+        scen_match = re.search(r'(\[SCENARIO\].*?)(?=\n\[|$)', last_professor_text, re.DOTALL)
+        # Extract CHALLENGE block
+        chal_match = re.search(r'(\[CHALLENGE\].*?)(?=\n\[|$)', last_professor_text, re.DOTALL)
+        # Extract OPTIONS block
+        opt_match = re.search(r'(\[OPTIONS\].*?)(?=\n\[|$)', last_professor_text, re.DOTALL)
+
+        parts = []
+        if scen_match:
+            parts.append("CASE FACTS:\n" + scen_match.group(1).replace("[SCENARIO]", "").strip())
+        if chal_match:
+            parts.append("PARTICIPANT TASK:\n" + chal_match.group(1).replace("[CHALLENGE]", "").strip())
+        if opt_match:
+            parts.append("AVAILABLE ACTIONS:\n" + opt_match.group(1).replace("[OPTIONS]", "").strip())
+
+        extracted = "\n\n".join(parts) if parts else last_professor_text[:1500]
+    else:
+        extracted = last_professor_text[:1500]
+
     # Build a minimal prompt to avoid confusing the small LLM
-    prompt = f"PREVIOUS SCENARIO:\n{last_professor_text[:500]}\n\n"
-    prompt += f"The student chose: '{question}'\n\n"
-    
+    prompt = f"PREVIOUS SCENARIO CONTEXT:\n{extracted}\n\n"
+    prompt += f"PARTICIPANT RESPONSE:\n'{question}'\n\n"
+
     if rag_ctx:
         prompt += f"LEGAL CONTEXT:\n{rag_ctx[:3000]}\n\n"
-    
+
     if is_conclusion:
         prompt += "This is the FINAL TURN. Follow the STRICT OUTPUT FORMAT for CONCLUSION."
     else:
-        prompt += "Evaluate the choice. Then present a NEW, DIFFERENT challenge. Follow the STRICT OUTPUT FORMAT for CONTINUING."
-    
+        prompt += "Evaluate the student's actual choice based on the preserved previous options. Follow the STRICT OUTPUT FORMAT for CONTINUING."
+
     return prompt
 
 
 def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
+    call_max_tokens = 600
+    call_temp = 0.7
     ctx_len = len(rag_ctx.strip()) if rag_ctx else 0
     print(f"[SIMULATION] rag_ctx length: {ctx_len}", flush=True)
 
@@ -1227,102 +1185,97 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
         print("[SIMULATION] mode: RAG-grounded", flush=True)
 
     is_start = any(w in question.lower() for w in ["start", "ξεκίνα", "σεναριο", "σενάριο", "παιχνίδι", "εκπαίδευση", "scenario", "simulation", "new", "προσομοίωση", "προσομοιωση", "serious game"])
-    
+
     # Count student turns to decide if we should force a conclusion
     student_turns = _count_student_turns(history)
     is_conclusion = (not is_start) and (student_turns >= MAX_TURNS)
-    
+
     if is_conclusion:
         print(f"[SIMULATION] Forcing conclusion after {student_turns} student turns", flush=True)
-    
+
     prompt = build_simulation_prompt(question, history, rag_ctx, is_conclusion=is_conclusion)
 
     if is_fallback:
         q_clean = question.strip().lower()
         choice = extract_choice(q_clean)
-        
+
         if choice:
             ctx = find_latest_labyrinth_context(history)
             scenario_id = ctx["scenario_id"] if ctx else None
-            
+
             runtime_graphs = get_runtime_scenario_graphs()
             if scenario_id and scenario_id in runtime_graphs:
                 state = replay_labyrinth_state(history, scenario_id)
                 graph = runtime_graphs[scenario_id]
                 node_data = graph["nodes"].get(state["current_node"])
-                
+
                 if node_data and choice in node_data["options"] and not state["finished"]:
                     opt = node_data["options"][choice]
-                    
+
                     state["choices"].append(choice)
                     state["step_count"] += 1
-                    
+
                     apply_labyrinth_option(state, opt)
-                    
+
                     state["events"].append({
                         "node": state["current_node"],
                         "choice": choice,
                         "feedback": opt["feedback"],
                         "expert_log": opt["expert_log"]
                     })
-                    
+
                     state["current_node"] = opt["next_node"]
                     state["path"].append(opt["next_node"])
-                    
+
                     if state["current_node"] == "END" or state["step_count"] >= graph["max_steps"]:
                         state["finished"] = True
                         output = render_labyrinth_final_report(graph, state, choice, opt)
                     else:
                         output = render_labyrinth_step(graph, state, choice, opt)
-                        
+
                     yield from stream_static_text(output, chunk_size=10, delay=0.01)
                     return
-                
-                
-            # If it's a standalone A/B/C but not in a valid labyrinth context, don't fall back to legacy.
-            recovery_msg = (
-                "[SIMULATION MODE]\n"
-                "Professional Procurement Labyrinth\n\n"
-                "[STATE RECOVERY]\n"
-                "The current labyrinth state could not be recovered from the conversation history.\n\n"
-                "[NEXT STEP]\n"
-                "Please restart the scenario with:\n"
-                "give me a serious game about direct awards"
-            )
-            yield from stream_static_text(recovery_msg, chunk_size=10, delay=0.01)
-            return
-                
-        is_labyrinth_trigger = any(k in q_clean for k in ["direct award", "απευθείας ανάθεση", "απευθείας αναθέσεις", "urgent", "urgency", "urgent procurement", "κατεπείγον", "κατεπείγουσα ανάγκη", "technical specifications", "specifications", "φωτογραφικές προδιαγραφές", "προδιαγραφές"])
-        if is_labyrinth_trigger:
-            scenario_id = select_labyrinth_scenario(q_clean)
-            runtime_graphs = get_runtime_scenario_graphs()
-            
-            if scenario_id not in runtime_graphs:
-                scenario_id = "direct_award_fragmentation"
-                
-            state = replay_labyrinth_state([], scenario_id)
-            graph = runtime_graphs[scenario_id]
-            output = render_labyrinth_start(graph, state)
-            yield from stream_static_text(output, chunk_size=10, delay=0.01)
-            return
 
-        # Legacy fallback safety - NEVER process A/B/C here anymore
-        q_clean_upper = q_clean.upper()
-        if q_clean_upper == 'NEXT':
-            pattern = SCENARIO_PATTERNS["general_risk"]
-            output = render_professional_training_start(pattern)
-            yield from stream_static_text(output, chunk_size=10, delay=0.01)
-            return
-        
-        pattern = get_scenario_pattern(question)
-        if is_start:
-            output = render_professional_training_start(pattern)
-            yield from stream_static_text(output, chunk_size=10, delay=0.01)
-            return
-        elif is_conclusion:
-            sys_prompt = build_fallback_conclusion(pattern)
-        else:
+
+            # Temporary compatibility fallback: absence of scenario_id indicates legacy fallback.
+            # Documented limitation: We rely on the absence of scenario_id rather than a specific legacy marker.
+            pattern = get_scenario_pattern(question)
             sys_prompt = build_fallback_continue(pattern)
+            call_max_tokens = 300
+            call_temp = 0.25
+        else:
+            is_labyrinth_trigger = any(k in q_clean for k in ["direct award", "απευθείας ανάθεση", "απευθείας αναθέσεις", "urgent", "urgency", "urgent procurement", "κατεπείγον", "κατεπείγουσα ανάγκη", "technical specifications", "specifications", "φωτογραφικές προδιαγραφές", "προδιαγραφές"])
+            if is_labyrinth_trigger:
+                scenario_id = select_labyrinth_scenario(q_clean)
+                runtime_graphs = get_runtime_scenario_graphs()
+
+                if scenario_id not in runtime_graphs:
+                    scenario_id = "direct_award_fragmentation"
+
+                state = replay_labyrinth_state([], scenario_id)
+                graph = runtime_graphs[scenario_id]
+                output = render_labyrinth_start(graph, state)
+                yield from stream_static_text(output, chunk_size=10, delay=0.01)
+                return
+
+            # Legacy fallback safety - NEVER process A/B/C here anymore
+            q_clean_upper = q_clean.upper()
+            if q_clean_upper == 'NEXT':
+                pattern = SCENARIO_PATTERNS["general_risk"]
+                output = render_professional_training_start(pattern)
+                yield from stream_static_text(output, chunk_size=10, delay=0.01)
+                return
+
+            pattern = get_scenario_pattern(question)
+            if is_start:
+                sys_prompt = build_fallback_start(pattern)
+            elif is_conclusion:
+                sys_prompt = build_fallback_conclusion(pattern)
+            else:
+                sys_prompt = build_fallback_continue(pattern)
+                # Tighter generation parameters for the assessment fallback
+                call_max_tokens = 300
+                call_temp = 0.25
     else:
         if is_start:
             sys_prompt = SIMULATION_SYSTEM_PROMPT_START
@@ -1330,19 +1283,19 @@ def stream_simulation(question: str, history: List[Dict], rag_ctx: str):
             sys_prompt = SIMULATION_SYSTEM_PROMPT_CONCLUSION
         else:
             sys_prompt = SIMULATION_SYSTEM_PROMPT_CONTINUE
-    
-    yield from stream_llm(prompt, max_tokens=600, temperature=0.7, system_prompt=sys_prompt)
+
+    yield from stream_llm(prompt, max_tokens=call_max_tokens, temperature=call_temp, system_prompt=sys_prompt)
 
 
 def generate_report_card(history: List[Dict]):
     from llm_interface import call_llm_json
-    
+
     # Extract only the relevant parts
     transcript = ""
     for msg in history:
         role = "Student" if msg.get("role") == "user" else "Professor"
         transcript += f"{role}: {msg.get('text', '')[:300]}\n"
-    
+
     prompt = (
         "Evaluate this procurement simulation transcript.\n"
         "The student was tested on EU Procurement Directives and Greek Law 4412/2016.\n\n"
