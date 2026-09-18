@@ -14,6 +14,8 @@ Simple_Federated is a semantic procurement diagnostic and training system that c
 
 The system transforms procurement analytics from **measurement** to **diagnosis** by explaining not only what is observed, but also **why procurement markets behave the way they do**.
 
+![](docs/architecture.png)
+
 ---
 
 ### Core Innovation
@@ -53,6 +55,8 @@ All data are:
 - Resolved into a unified buyer–supplier network
 - Structured for graph-native analytics
 - Designed to support semantic interpretation and explainable diagnostics
+
+![](docs/graph.gif)
 
 #### Geographic Enrichment 
 
@@ -127,6 +131,8 @@ The system also implements cross-layer diagnostic indicators, including:
 - Market typology analysis
 - Recurrence-based diagnostics
 - Risk-oriented interpretation of repeated procurement relationships
+
+![](docs/diagnosis.gif)
 
 ---
 
@@ -260,6 +266,8 @@ The system is not intended to replace legal judgement. It is designed as an assi
 ### Simulation and Training Layer
 
 Simple_Federated includes a procurement simulation and training environment.
+
+![](docs/simulation.gif)
 
 #### RAG-Based Scenario Generation
 
